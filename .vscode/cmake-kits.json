@@ -1,0 +1,10 @@
+[
+    {
+        "name": "Xtensa Toolchain",
+        "toolchainFile": "$ENV{IDF_PATH}/tools/cmake/project.cmake",
+        "compilers": {
+            "CC": "xtensa-lx106-elf-g++",
+            "CXX": "xtensa-lx106-elf-gcc"
+        }
+    }
+]

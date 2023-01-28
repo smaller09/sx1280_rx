@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "freertos.h": "c",
+        "eagle_soc.h": "c",
+        "random": "c",
+        "gpio_struct.h": "c",
+        "esp_system.h": "c",
+        "spi_struct.h": "c"
+    },
+    "cmake.configureOnOpen": true,
+}

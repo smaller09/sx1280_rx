@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "ESP8266",
+            "includePath": [
+                "${workspaceFolder}/main/**",
+                "${workspaceFolder}/build/include/*",
+                "${workspaceFolder}/components/**",
+                "${IDF_PATH}/components/**",
+                "${IDF_PATH}/components/freertos/port/esp8266/include"
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "defines": [
+                "__ESP_FILE__",
+                "NDEBUG",
+                "__BSD_VISIBLE",
+                "__XSI_VISIBLE=500",
+                "LOG_LOCAL_LEVEL=ESP_LOG_VERBOSE",
+                "CONFIG_LOG_TIMESTAMP_SOURCE_RTOS",
+                "CONFIG_FREERTOS_HZ=100"
+            ],
+            "compilerPath": "/opt/xtensa-lx106-elf/bin/xtensa-lx106-elf-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

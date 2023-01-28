@@ -1,0 +1,141 @@
+{
+    "options": {
+        "env": {}
+    },
+     //See https://go.microsoft.com/fwlink/?LinkId=733558 
+     //for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Menuconfig",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "type": "shell",
+            "command": "${IDF_PATH}/tools/idf.py",
+            "args": [
+                "menuconfig"
+            ],
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build Project",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "type": "shell",
+            "command": "${IDF_PATH}/tools/idf.py",
+            "args": [
+                "build"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "echo": true
+            },
+            "options": {
+                "shell": {}
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "Flash & Monitor",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "${IDF_PATH}/tools/idf.py",
+            "type": "shell",
+            "args": [
+                "-p",
+                "/dev/ttyACM0",
+                "flash",
+                "monitor"
+            ],
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "Size of Project",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "${IDF_PATH}/tools/idf.py",
+            "type": "shell",
+            "args": [
+                "size"
+            ],
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean Project",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "${IDF_PATH}/tools/idf.py",
+            "type": "shell",
+            "args": [
+                "clean"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Full-Clean Project",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "${IDF_PATH}/tools/idf.py",
+            "type": "shell",
+            "args": [
+                "fullclean"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: build",
+            "command": "build",
+            "targets": [
+                "all"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        }
+    ]
+}
+
