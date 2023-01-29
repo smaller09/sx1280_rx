@@ -7,23 +7,18 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <stdio.h>
-//#include <string.h>
 #include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-
-#include "esp8266/spi_struct.h"
-#include "esp8266/gpio_struct.h"
-//#include "esp_system.h"
-
 #include "time.h"
 #include "hspi.h"
 
+sx1280_buff_t data_buff;
+
 void gpio_config()
 {
-
 }
 
 void app_main()

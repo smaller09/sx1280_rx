@@ -5,7 +5,11 @@
         "random": "c",
         "gpio_struct.h": "c",
         "esp_system.h": "c",
-        "spi_struct.h": "c"
+        "spi_struct.h": "c",
+        "stdio.h": "c",
+        "string.h": "c",
+        "_ansi.h": "c",
+        "pin_mux_register.h": "c"
     },
     "cmake.configureOnOpen": true,
 }

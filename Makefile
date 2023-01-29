@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := sx1280
+PROJECT_NAME := sx1280_rx
 
 include $(IDF_PATH)/make/project.mk
 
