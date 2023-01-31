@@ -6,16 +6,13 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
-#include <stdio.h>
-#include <sys/time.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 
-#include "time.h"
-#include "hspi.h"
 
-sx1280_buff_t data_buff;
+#include "sx1280_rx.h"
+
+sx1280_buff_t spi_buf;
+uint8_t package_size;
+
 
 void gpio_config()
 {

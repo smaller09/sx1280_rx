@@ -11,5 +11,5 @@
         "_ansi.h": "c",
         "pin_mux_register.h": "c"
     },
-    "cmake.configureOnOpen": true,
+    "cmake.buildTask": true,
 }

@@ -1,4 +1,7 @@
 #include "hspi.h"
+#include "sx1280_rx.h"
+
+extern sx1280_buff_t spi_buf;
 
 void IRAM_ATTR hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits)
 {
@@ -23,7 +26,7 @@ void IRAM_ATTR hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits)
         for (x = 0; x < dout_bits; x += 32)
         {
             y = x / 32;
-            SPI1.data_buf[y] = data_buff.send_buff_32[y];
+            SPI1.data_buf[y] = spi_buf.send_buf_32[y];
         }
     }
     else
@@ -48,7 +51,7 @@ void IRAM_ATTR hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits)
         for (x = 0; x < din_bits; x += 32)
         {
             y = x / 32;
-            data_buff.recv_buff_32[y] = SPI1.data_buf[y + 8];
+            spi_buf.recv_buf_32[y] = SPI1.data_buf[y + 8];
         }
     }
 }
@@ -136,4 +139,3 @@ void hspi_init()
     hspi_set_interface();
     hspi_set_clk_div();
 }
-
