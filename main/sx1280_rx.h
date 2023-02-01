@@ -1,12 +1,11 @@
+#ifndef __SX1280_RX_H__
+#define __SX1280_RX_H__
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <sys/time.h>
 #include "time.h"
-
-#include "esp8266/spi_struct.h"
-#include "esp8266/pin_mux_register.h"
 
 typedef union
 {
@@ -27,3 +26,4 @@ typedef union
    };
    /* data */
 } sx1280_buff_t;
+#endif //__SX1280_RX_H__

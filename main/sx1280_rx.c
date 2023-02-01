@@ -9,17 +9,11 @@
 
 
 #include "sx1280_rx.h"
-
-sx1280_buff_t spi_buf;
-uint8_t package_size;
-
-
-void gpio_config()
-{
-}
+#include "sx1280.h"
+WORD_ALIGNED_ATTR RTC_DATA_ATTR sx1280_buff_t spi_buf;
 
 void app_main()
 {
-   gpio_config();
-   hspi_init();
+   
+   SX1280_Init();
 }

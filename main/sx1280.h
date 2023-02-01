@@ -1660,4 +1660,6 @@ int8_t SX1280ParseHexFileLine(char *line);
  */
 int8_t SX1280GetHexFileLineFields(char *line, uint8_t *bytes, uint16_t *addr, uint16_t *num, uint8_t *code);
 
+void SX1280_Init();
+
 #endif // __SX1280_H__
