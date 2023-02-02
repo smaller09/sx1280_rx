@@ -24,7 +24,7 @@
 
 extern  sx1280_buff_t DRAM_ATTR spi_buf;
 
-RTC_RODATA_ATTR const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
+const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
 
 RTC_DATA_ATTR spi_trans_t trans;
 
@@ -172,9 +172,9 @@ void IRAM_ATTR SX1280SetRfFrequency(uint8_t channel)
 
 void SX1280Reset(void)
 {
-    gpio_set_level(GPIO_NUM_16,0);
-    vTaskDelay(5 / portTICK_PERIOD_MS);
-    gpio_set_level(GPIO_NUM_16,1);
+    gpio_set_level(GPIO_NUM_2,0);
+    vTaskDelay(5);
+    gpio_set_level(GPIO_NUM_2,1);
 }
 
 RadioStatus_t IRAM_ATTR SX1280GetStatus(void)
@@ -225,7 +225,7 @@ void gpio_init()
     sx1280_gpio.pull_down_en = 0;
     sx1280_gpio.pull_up_en = 1;
     gpio_config(&sx1280_gpio);
-    gpio_set_level(GPIO_NUM_16, 1);
+    gpio_set_level(GPIO_NUM_16, 0);
     gpio_set_level(GPIO_NUM_2, 1);
 }
 void hspi_init()
@@ -252,6 +252,19 @@ void hspi_init()
     trans.addr = NULL;
     trans.miso = (spi_buf.recv_buf_32);
     trans.mosi = (spi_buf.send_buf_32);
+}
+
+// hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
+
+uint16_t SX1280GetFirmwareVersion( void )
+{
+    spi_buf.send_buf_8[0] = (uint8_t)(((uint16_t)REG_LR_FIRMWARE_VERSION_MSB >> 8) & 0x00FF);
+    spi_buf.send_buf_8[1] = (uint8_t)((uint16_t)REG_LR_FIRMWARE_VERSION_MSB & 0x00FF);
+
+    hspi_trans(RADIO_READ_REGISTER, 16, 24);
+    uint16_t ver;
+    ver=spi_buf.recv_buf_8[1];
+    return ((ver << 8 ) | spi_buf.recv_buf_8[2]);
 }
 
 void SX1280_Init()

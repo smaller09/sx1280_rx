@@ -8,6 +8,7 @@
 #include "freertos/semphr.h"
 #include <sys/time.h>
 #include "time.h"
+#include "esp_task_wdt.h"
 
 typedef union
 {

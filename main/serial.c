@@ -1,5 +1,6 @@
 #include "serial.h"
 #include "driver/uart.h"
+
 #define BUF_SIZE (128)
 static QueueHandle_t uart0_queue;
 
@@ -55,6 +56,7 @@ static void uart_event_task(void *pvParameters)
                 default:
                     // ESP_LOGI(TAG, "uart event type: %d", event.type);
                     break;
+            esp_task_wdt_reset();
             }
         }
     }
@@ -63,16 +65,17 @@ static void uart_event_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void uart0_init()
+void UART0_Init()
 {
-        uart_config_t uart_config = {
-        .baud_rate = 420000,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-    };
+    uart_config_t uart_config;
+    
+        uart_config.baud_rate = 115200,
+        uart_config.data_bits = UART_DATA_8_BITS,
+        uart_config.parity = UART_PARITY_DISABLE,
+        uart_config.stop_bits = UART_STOP_BITS_1,
+        uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+        
     uart_param_config(UART_NUM_0, &uart_config);
-    uart_driver_install(UART_NUM_0, BUF_SIZE, BUF_SIZE, 100, &uart0_queue, 0);
+    uart_driver_install(UART_NUM_0, BUF_SIZE * 2, BUF_SIZE * 2, 100, &uart0_queue, 0);
     xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
 }
