@@ -267,6 +267,13 @@ uint16_t SX1280GetFirmwareVersion( void )
     return ((ver << 8 ) | spi_buf.recv_buf_8[2]);
 }
 
+uint8_t SX1280GetLNARegime()
+{
+    spi_buf.send_buf_8[0] = (uint8_t)(((uint16_t)REG_LNA_REGIME >> 8) & 0x00FF);
+    spi_buf.send_buf_8[1] = (uint8_t)((uint16_t)REG_LNA_REGIME & 0x00FF);
+    hspi_trans(RADIO_READ_REGISTER, 16, 16);
+    return spi_buf.recv_buf_8[1];
+}
 void SX1280_Init()
 {
     gpio_init();

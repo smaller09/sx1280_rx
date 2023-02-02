@@ -1662,4 +1662,6 @@ int8_t SX1280GetHexFileLineFields(char *line, uint8_t *bytes, uint16_t *addr, ui
 
 void SX1280_Init();
 
+uint8_t SX1280GetLNARegime();
+
 #endif // __SX1280_H__
