@@ -1,6 +1,8 @@
 #ifndef __SX1280_RX_H__
 #define __SX1280_RX_H__
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"

@@ -10,10 +10,14 @@
 
 #include "sx1280_rx.h"
 #include "sx1280.h"
+#include "serial.h"
+
 WORD_ALIGNED_ATTR RTC_DATA_ATTR sx1280_buff_t spi_buf;
 
 void app_main()
 {
    
    SX1280_Init();
+   uart0_init();
+   
 }
