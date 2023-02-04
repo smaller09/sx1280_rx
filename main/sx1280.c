@@ -282,4 +282,6 @@ void SX1280_Init()
 
     SX1280Reset();
 
+    SX1280SetStandby(STDBY_XOSC);
+
 }
