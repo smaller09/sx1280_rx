@@ -22,13 +22,13 @@
   */
 // esp_err_t spi_trans(spi_host_t host, spi_trans_t *trans);
 
-extern  sx1280_buff_t DRAM_ATTR spi_buf;
+extern  sx1280_buff_t spi_buf;
 
 const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
 
-RTC_DATA_ATTR spi_trans_t trans;
+spi_trans_t trans;
 
-static void IRAM_ATTR hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
+static void hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
 {
     trans.cmd=&cmd;
     trans.bits.mosi = dout_bits;
@@ -36,7 +36,7 @@ static void IRAM_ATTR hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bi
     spi_trans(HSPI_HOST, &trans);
 }
 
-uint8_t IRAM_ATTR SX1280GetPayload(uint8_t size)
+uint8_t SX1280GetPayload(uint8_t size)
 {
 
     hspi_trans(RADIO_GET_RXBUFFERSTATUS, 0, 24);
@@ -48,7 +48,7 @@ uint8_t IRAM_ATTR SX1280GetPayload(uint8_t size)
     return 0;
 }
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
-void IRAM_ATTR SX1280SetRx(TickTime_t timeout)
+void SX1280SetRx(TickTime_t timeout)
 {
 
     spi_buf.send_buf_8[0] = timeout.Step;
@@ -60,7 +60,7 @@ void IRAM_ATTR SX1280SetRx(TickTime_t timeout)
     hspi_trans(RADIO_SET_RX, 24, 0);
 }
 
-void IRAM_ATTR SX1280ClearIrqStatus(uint16_t irq)
+void SX1280ClearIrqStatus(uint16_t irq)
 {
 
     spi_buf.send_buf_8[0] = (uint8_t)(((uint16_t)irq >> 8) & 0x00FF);
@@ -70,7 +70,7 @@ void IRAM_ATTR SX1280ClearIrqStatus(uint16_t irq)
 }
 
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
-void IRAM_ATTR SX1280SetTx(TickTime_t timeout)
+void SX1280SetTx(TickTime_t timeout)
 {
 
     spi_buf.send_buf_8[0] = timeout.Step;
@@ -82,7 +82,7 @@ void IRAM_ATTR SX1280SetTx(TickTime_t timeout)
     hspi_trans(RADIO_SET_TX, 24, 0);
 }
 
-void IRAM_ATTR SX1280SendPayload(uint8_t size, TickTime_t timeout)
+void SX1280SendPayload(uint8_t size, TickTime_t timeout)
 {
     spi_buf.send_buf_8[0] = txBaseAddress;
     hspi_trans(RADIO_WRITE_BUFFER, (size + 1) * 8, 0);
@@ -92,25 +92,25 @@ void IRAM_ATTR SX1280SendPayload(uint8_t size, TickTime_t timeout)
 
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
 
-void IRAM_ATTR SX1280SetStandby(RadioStandbyModes_t standbyConfig)
+void  SX1280SetStandby(RadioStandbyModes_t standbyConfig)
 {
     spi_buf.send_buf_8[0] = standbyConfig;
     hspi_trans(RADIO_SET_STANDBY, 8, 0);
 }
 
-void IRAM_ATTR SX1280SetRegulatorMode(RadioRegulatorModes_t mode)
+void SX1280SetRegulatorMode(RadioRegulatorModes_t mode)
 {
     spi_buf.send_buf_8[0] = mode;
     hspi_trans(RADIO_SET_REGULATORMODE, 8, 0);
 }
 
-void IRAM_ATTR SX1280SetPacketType(RadioPacketTypes_t packetType)
+void  SX1280SetPacketType(RadioPacketTypes_t packetType)
 {
     spi_buf.send_buf_8[0] = packetType;
     hspi_trans(RADIO_SET_PACKETTYPE, 8, 0);
 }
 
-void IRAM_ATTR SX1280SetModulationParams(ModulationParams_t *modulationParams)
+void  SX1280SetModulationParams(ModulationParams_t *modulationParams)
 {
 
     spi_buf.send_buf_8[0] = modulationParams->Params.LoRa.SpreadingFactor;
@@ -119,7 +119,7 @@ void IRAM_ATTR SX1280SetModulationParams(ModulationParams_t *modulationParams)
     hspi_trans(RADIO_SET_MODULATIONPARAMS, 24, 0);
 }
 
-void IRAM_ATTR SX1280SetPacketParams(PacketParams_t *packetParams)
+void  SX1280SetPacketParams(PacketParams_t *packetParams)
 {
 
     spi_buf.send_buf_8[0] = packetParams->Params.LoRa.PreambleLength;
@@ -133,7 +133,7 @@ void IRAM_ATTR SX1280SetPacketParams(PacketParams_t *packetParams)
     hspi_trans(RADIO_SET_PACKETPARAMS, 48, 0);
 }
 
-void IRAM_ATTR SX1280SetBufferBaseAddresses(uint8_t txBaseAddress, uint8_t rxBaseAddress)
+void SX1280SetBufferBaseAddresses(uint8_t txBaseAddress, uint8_t rxBaseAddress)
 {
 
     spi_buf.send_buf_8[0] = txBaseAddress;
@@ -141,7 +141,7 @@ void IRAM_ATTR SX1280SetBufferBaseAddresses(uint8_t txBaseAddress, uint8_t rxBas
     hspi_trans(RADIO_SET_BUFFERBASEADDRESS, 16, 0);
 }
 
-void IRAM_ATTR SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime)
+void SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime)
 {
 
     // The power value to send on SPI/UART is in the range [0..31] and the
@@ -151,13 +151,13 @@ void IRAM_ATTR SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime)
     hspi_trans(RADIO_SET_TXPARAMS, 16, 0);
 }
 
-void IRAM_ATTR SX1280SetAutoFS(uint8_t enable)
+void  SX1280SetAutoFS(uint8_t enable)
 {
     spi_buf.send_buf_8[0] = enable;
     hspi_trans(RADIO_SET_AUTOFS, 8, 0);
 }
 
-void IRAM_ATTR SX1280SetRfFrequency(uint8_t channel)
+void  SX1280SetRfFrequency(uint8_t channel)
 {
     double frequency;
     frequency = 2400000000 + 1000000 * channel;
@@ -177,7 +177,7 @@ void SX1280Reset(void)
     gpio_set_level(GPIO_NUM_2,1);
 }
 
-RadioStatus_t IRAM_ATTR SX1280GetStatus(void)
+RadioStatus_t  SX1280GetStatus(void)
 {
     RadioStatus_t status;
     hspi_trans(RADIO_GET_STATUS, 0, 8);
@@ -185,14 +185,14 @@ RadioStatus_t IRAM_ATTR SX1280GetStatus(void)
     return status;
 }
 
-uint16_t IRAM_ATTR SX1280GetIrqStatus(void)
+uint16_t SX1280GetIrqStatus(void)
 {
     // SX1280HalReadCommand( RADIO_GET_IRQSTATUS, irqStatus, 2 );
     hspi_trans(RADIO_GET_IRQSTATUS, 0, 24);
     return (spi_buf.recv_buf_8[1] << 8) | spi_buf.recv_buf_8[2];
 }
 
-void IRAM_ATTR SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask)
+void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask)
 {
 
     spi_buf.send_buf_8[0] = (uint8_t)((irqMask >> 8) & 0x00FF);

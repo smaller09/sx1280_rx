@@ -11,12 +11,12 @@
 #include "sx1280_rx.h"
 #include "sx1280.h"
 #include "serial.h"
-#include "driver/uart.h"
+//#include "driver/uart.h"
 #include "ota.h"
 
-WORD_ALIGNED_ATTR RTC_DATA_ATTR sx1280_buff_t spi_buf;
+sx1280_buff_t spi_buf;
 
-static void IRAM_ATTR mainloop(void *arg)
+static void mainloop(void *arg)
 {
    for (;;)
    {
@@ -29,6 +29,10 @@ static void IRAM_ATTR mainloop(void *arg)
 void app_main()
 {
    // UART0_Init();
+   printf ("hello world!\n");
+
+   vTaskDelay(2000);
+
    ota_init();
    
    SX1280_Init();
@@ -41,6 +45,6 @@ void app_main()
 
    xTaskCreate(mainloop, "mainloop", 1024, NULL, 10, NULL);
 
-//   esp_task_wdt_init();
+   esp_task_wdt_init();
 
 }

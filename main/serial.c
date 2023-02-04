@@ -7,7 +7,7 @@ static QueueHandle_t uart0_queue;
 static void uart_event_task(void *pvParameters)
 {
     uart_event_t event;
-    size_t buffered_size;
+    
     uint8_t* dtmp = (uint8_t*) malloc(BUF_SIZE);
     for(;;) {
         //Waiting for UART event.
