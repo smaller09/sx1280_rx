@@ -1,9 +1,47 @@
-menu "Example Configuration"
+menu "OTA Server Configuration"
 
-config FIRMWARE_UPGRADE_URL
-    string "firmware upgrade url endpoint"
-    default "https://192.168.0.3:8070/hello-world.bin"
-    help
-        URL of server which hosts the firmware
-        image.
+config SERVER_IP
+    string "HTTP Server IP"
+	default "192.168.1.11"
+	help
+		HTTP Server IP to download the image file from.
+
+		See example README.md for details.
+
+config SERVER_PORT
+	string "HTTP Server Port"
+	default "8070"
+	help
+		HTTP Server port to connect to.
+		Should be chosen not to conflict with any other port used
+		on the system.
+
+config EXAMPLE_FILENAME
+	string "HTTP GET Filename"
+	default "/sx1280_rx.ota.bin"
+	help
+		Filename of the app image file to download for
+		the OTA update.
+
+endmenu
+
+menu "Wifi Configuration"
+
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the example to connect to.
+
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the example to use.
+
+    config ESP_MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+        help
+            Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
 endmenu

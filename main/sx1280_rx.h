@@ -29,4 +29,24 @@ typedef union
    };
    /* data */
 } sx1280_buff_t;
+
+typedef enum
+{
+   LRMODE = 0x00, // Longe range mode
+   LLMODE = 0xff, // Low latency mode
+} rc_mode_t;
+
+typedef union
+{
+   struct
+   {
+      uint8_t islinked;
+      rc_mode_t rc_mode;
+      uint16_t syncword;
+   };
+   uint32_t val;
+}bind_status_t;
+
+
+
 #endif //__SX1280_RX_H__

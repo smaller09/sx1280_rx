@@ -4,33 +4,143 @@
 #include "driver/spi.h"
 
 /**
-  * @brief SPI data transfer function
-  *
-  * @note If the bit of the corresponding phase in the transmission parameter is 0, its data will not work.
-  *       For example: trans.bits.cmd = 0, cmd will not be transmitted
-  *
-  * @param host SPI peripheral number
-  *     - CSPI_HOST SPI0
-  *     - HSPI_HOST SPI1
-  *
-  * @param trans Pointer to transmission parameter structure
-  *
-  * @return
-  *     - ESP_OK Success
-  *     - ESP_ERR_INVALID_ARG Parameter error
-  *     - ESP_FAIL spi has not been initialized yet
-  */
+ * @brief SPI data transfer function
+ *
+ * @note If the bit of the corresponding phase in the transmission parameter is 0, its data will not work.
+ *       For example: trans.bits.cmd = 0, cmd will not be transmitted
+ *
+ * @param host SPI peripheral number
+ *     - CSPI_HOST SPI0
+ *     - HSPI_HOST SPI1
+ *
+ * @param trans Pointer to transmission parameter structure
+ *
+ * @return
+ *     - ESP_OK Success
+ *     - ESP_ERR_INVALID_ARG Parameter error
+ *     - ESP_FAIL spi has not been initialized yet
+ */
 // esp_err_t spi_trans(spi_host_t host, spi_trans_t *trans);
 
-extern  sx1280_buff_t spi_buf;
+extern sx1280_buff_t spi_buf;
 
-const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
+static const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
+
+/*      frequency = 2400000000 + 1000000 * i;
+        freq = (uint32_t)((double)frequency / (double)FREQ_STEP);
+        freq_h = (uint8_t)((freq >> 16) & 0xFF);
+        freq_m = (uint8_t)((freq >> 8) & 0xFF);
+        freq_l = (uint8_t)(freq & 0xFF);
+*/
+static const DRAM_ATTR uint8_t fhss_freq[101][3] = {
+    {0xb8, 0x9d, 0x89},
+    {0xb8, 0xb1, 0x3b},
+    {0xb8, 0xc4, 0xec},
+    {0xb8, 0xd8, 0x9d},
+    {0xb8, 0xec, 0x4e},
+    {0xb9, 0x0, 0x0},
+    {0xb9, 0x13, 0xb1},
+    {0xb9, 0x27, 0x62},
+    {0xb9, 0x3b, 0x13},
+    {0xb9, 0x4e, 0xc4},
+    {0xb9, 0x62, 0x76},
+    {0xb9, 0x76, 0x27},
+    {0xb9, 0x89, 0xd8},
+    {0xb9, 0x9d, 0x89},
+    {0xb9, 0xb1, 0x3b},
+    {0xb9, 0xc4, 0xec},
+    {0xb9, 0xd8, 0x9d},
+    {0xb9, 0xec, 0x4e},
+    {0xba, 0x0, 0x0},
+    {0xba, 0x13, 0xb1},
+    {0xba, 0x27, 0x62},
+    {0xba, 0x3b, 0x13},
+    {0xba, 0x4e, 0xc4},
+    {0xba, 0x62, 0x76},
+    {0xba, 0x76, 0x27},
+    {0xba, 0x89, 0xd8},
+    {0xba, 0x9d, 0x89},
+    {0xba, 0xb1, 0x3b},
+    {0xba, 0xc4, 0xec},
+    {0xba, 0xd8, 0x9d},
+    {0xba, 0xec, 0x4e},
+    {0xbb, 0x0, 0x0},
+    {0xbb, 0x13, 0xb1},
+    {0xbb, 0x27, 0x62},
+    {0xbb, 0x3b, 0x13},
+    {0xbb, 0x4e, 0xc4},
+    {0xbb, 0x62, 0x76},
+    {0xbb, 0x76, 0x27},
+    {0xbb, 0x89, 0xd8},
+    {0xbb, 0x9d, 0x89},
+    {0xbb, 0xb1, 0x3b},
+    {0xbb, 0xc4, 0xec},
+    {0xbb, 0xd8, 0x9d},
+    {0xbb, 0xec, 0x4e},
+    {0xbc, 0x0, 0x0},
+    {0xbc, 0x13, 0xb1},
+    {0xbc, 0x27, 0x62},
+    {0xbc, 0x3b, 0x13},
+    {0xbc, 0x4e, 0xc4},
+    {0xbc, 0x62, 0x76},
+    {0xbc, 0x76, 0x27},
+    {0xbc, 0x89, 0xd8},
+    {0xbc, 0x9d, 0x89},
+    {0xbc, 0xb1, 0x3b},
+    {0xbc, 0xc4, 0xec},
+    {0xbc, 0xd8, 0x9d},
+    {0xbc, 0xec, 0x4e},
+    {0xbd, 0x0, 0x0},
+    {0xbd, 0x13, 0xb1},
+    {0xbd, 0x27, 0x62},
+    {0xbd, 0x3b, 0x13},
+    {0xbd, 0x4e, 0xc4},
+    {0xbd, 0x62, 0x76},
+    {0xbd, 0x76, 0x27},
+    {0xbd, 0x89, 0xd8},
+    {0xbd, 0x9d, 0x89},
+    {0xbd, 0xb1, 0x3b},
+    {0xbd, 0xc4, 0xec},
+    {0xbd, 0xd8, 0x9d},
+    {0xbd, 0xec, 0x4e},
+    {0xbe, 0x0, 0x0},
+    {0xbe, 0x13, 0xb1},
+    {0xbe, 0x27, 0x62},
+    {0xbe, 0x3b, 0x13},
+    {0xbe, 0x4e, 0xc4},
+    {0xbe, 0x62, 0x76},
+    {0xbe, 0x76, 0x27},
+    {0xbe, 0x89, 0xd8},
+    {0xbe, 0x9d, 0x89},
+    {0xbe, 0xb1, 0x3b},
+    {0xbe, 0xc4, 0xec},
+    {0xbe, 0xd8, 0x9d},
+    {0xbe, 0xec, 0x4e},
+    {0xbf, 0x0, 0x0},
+    {0xbf, 0x13, 0xb1},
+    {0xbf, 0x27, 0x62},
+    {0xbf, 0x3b, 0x13},
+    {0xbf, 0x4e, 0xc4},
+    {0xbf, 0x62, 0x76},
+    {0xbf, 0x76, 0x27},
+    {0xbf, 0x89, 0xd8},
+    {0xbf, 0x9d, 0x89},
+    {0xbf, 0xb1, 0x3b},
+    {0xbf, 0xc4, 0xec},
+    {0xbf, 0xd8, 0x9d},
+    {0xbf, 0xec, 0x4e},
+    {0xc0, 0x0, 0x0},
+    {0xc0, 0x13, 0xb1},
+    {0xc0, 0x27, 0x62},
+    {0xc0, 0x3b, 0x13},
+    {0xc0, 0x4e, 0xc4},
+};
 
 spi_trans_t trans;
 
 static void hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
 {
-    trans.cmd=&cmd;
+    trans.cmd = &cmd;
     trans.bits.mosi = dout_bits;
     trans.bits.miso = din_bits;
     spi_trans(HSPI_HOST, &trans);
@@ -92,7 +202,7 @@ void SX1280SendPayload(uint8_t size, TickTime_t timeout)
 
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
 
-void  SX1280SetStandby(RadioStandbyModes_t standbyConfig)
+void SX1280SetStandby(RadioStandbyModes_t standbyConfig)
 {
     spi_buf.send_buf_8[0] = standbyConfig;
     hspi_trans(RADIO_SET_STANDBY, 8, 0);
@@ -104,13 +214,13 @@ void SX1280SetRegulatorMode(RadioRegulatorModes_t mode)
     hspi_trans(RADIO_SET_REGULATORMODE, 8, 0);
 }
 
-void  SX1280SetPacketType(RadioPacketTypes_t packetType)
+void SX1280SetPacketType(RadioPacketTypes_t packetType)
 {
     spi_buf.send_buf_8[0] = packetType;
     hspi_trans(RADIO_SET_PACKETTYPE, 8, 0);
 }
 
-void  SX1280SetModulationParams(ModulationParams_t *modulationParams)
+void SX1280SetModulationParams(ModulationParams_t *modulationParams)
 {
 
     spi_buf.send_buf_8[0] = modulationParams->Params.LoRa.SpreadingFactor;
@@ -119,7 +229,7 @@ void  SX1280SetModulationParams(ModulationParams_t *modulationParams)
     hspi_trans(RADIO_SET_MODULATIONPARAMS, 24, 0);
 }
 
-void  SX1280SetPacketParams(PacketParams_t *packetParams)
+void SX1280SetPacketParams(PacketParams_t *packetParams)
 {
 
     spi_buf.send_buf_8[0] = packetParams->Params.LoRa.PreambleLength;
@@ -127,8 +237,8 @@ void  SX1280SetPacketParams(PacketParams_t *packetParams)
     spi_buf.send_buf_8[2] = packetParams->Params.LoRa.PayloadLength;
     spi_buf.send_buf_8[3] = packetParams->Params.LoRa.CrcMode;
     spi_buf.send_buf_8[4] = packetParams->Params.LoRa.InvertIQ;
-    spi_buf.send_buf_8[5] = NULL;
-    spi_buf.send_buf_8[6] = NULL;
+    spi_buf.send_buf_8[5] = 0;
+    spi_buf.send_buf_8[6] = 0;
 
     hspi_trans(RADIO_SET_PACKETPARAMS, 48, 0);
 }
@@ -151,33 +261,29 @@ void SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime)
     hspi_trans(RADIO_SET_TXPARAMS, 16, 0);
 }
 
-void  SX1280SetAutoFS(uint8_t enable)
+void SX1280SetAutoFS(uint8_t enable)
 {
     spi_buf.send_buf_8[0] = enable;
     hspi_trans(RADIO_SET_AUTOFS, 8, 0);
 }
 
-void  SX1280SetRfFrequency(uint8_t channel)
+void SX1280SetRfFrequency(uint8_t channel)
 {
-    double frequency;
-    frequency = 2400000000 + 1000000 * channel;
-    uint32_t freq;
-
-    freq = (uint32_t)((double)frequency / (double)FREQ_STEP);
-    spi_buf.send_buf_8[0] = (uint8_t)((freq >> 16) & 0xFF);
-    spi_buf.send_buf_8[1] = (uint8_t)((freq >> 8) & 0xFF);
-    spi_buf.send_buf_8[2] = (uint8_t)(freq & 0xFF);
+    spi_buf.send_buf_8[0] = fhss_freq[channel][0];
+    spi_buf.send_buf_8[1] = fhss_freq[channel][1];
+    spi_buf.send_buf_8[2] = fhss_freq[channel][2];
+    ;
     hspi_trans(RADIO_SET_RFFREQUENCY, 24, 0);
 }
 
 void SX1280Reset(void)
 {
-    gpio_set_level(GPIO_NUM_2,0);
+    gpio_set_level(GPIO_NUM_2, 0);
     vTaskDelay(5);
-    gpio_set_level(GPIO_NUM_2,1);
+    gpio_set_level(GPIO_NUM_2, 1);
 }
 
-RadioStatus_t  SX1280GetStatus(void)
+RadioStatus_t SX1280GetStatus(void)
 {
     RadioStatus_t status;
     hspi_trans(RADIO_GET_STATUS, 0, 8);
@@ -208,27 +314,7 @@ void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mas
 }
 
 
-void gpio_init()
-{
-    // GPIO2:Reset, GPIO4:DIO1, GPIO5:BUSY, GPIO0: SW, GPIO16:LED
-    gpio_config_t sx1280_gpio;
-    
-    sx1280_gpio.pin_bit_mask=(GPIO_Pin_2 | GPIO_Pin_16);
-    sx1280_gpio.mode = GPIO_MODE_OUTPUT;
-    sx1280_gpio.intr_type = GPIO_INTR_DISABLE;
-    sx1280_gpio.pull_down_en = 0;
-    sx1280_gpio.pull_up_en = 0;
-    gpio_config(&sx1280_gpio);
-    sx1280_gpio.pin_bit_mask=(GPIO_Pin_0 | GPIO_Pin_4 | GPIO_Pin_5);
-    sx1280_gpio.mode = GPIO_MODE_INPUT;
-    sx1280_gpio.intr_type = GPIO_INTR_DISABLE;
-    sx1280_gpio.pull_down_en = 0;
-    sx1280_gpio.pull_up_en = 1;
-    gpio_config(&sx1280_gpio);
-    gpio_set_level(GPIO_NUM_16, 0);
-    gpio_set_level(GPIO_NUM_2, 1);
-}
-void hspi_init()
+static void hspi_init()
 {
     spi_config_t hspi_config;
     // Load default interface parameters
@@ -254,17 +340,59 @@ void hspi_init()
     trans.mosi = (spi_buf.send_buf_32);
 }
 
-// hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
+/*
+void SX1280Calibrate( CalibrationParams_t calibParam )
+{
+    uint8_t cal = ( calibParam.ADCBulkPEnable << 5 ) |
+                  ( calibParam.ADCBulkNEnable << 4 ) |
+                  ( calibParam.ADCPulseEnable << 3 ) |
+                  ( calibParam.PLLEnable << 2 ) |
+                  ( calibParam.RC13MEnable << 1 ) |
+                  ( calibParam.RC64KEnable );
 
-uint16_t SX1280GetFirmwareVersion( void )
+    SX1280HalWriteCommand( RADIO_CALIBRATE, &cal, 1 );
+}
+
+double SX1280GetFrequencyError( )
+{
+    uint8_t efeRaw[3] = {0};
+    uint32_t efe = 0;
+    double efeHz = 0.0;
+
+    switch( SX1280GetPacketType( ) )
+    {
+        case PACKET_TYPE_LORA:
+        case PACKET_TYPE_RANGING:
+            efeRaw[0] = SX1280HalReadRegister( REG_LR_ESTIMATED_FREQUENCY_ERROR_MSB );
+            efeRaw[1] = SX1280HalReadRegister( REG_LR_ESTIMATED_FREQUENCY_ERROR_MSB + 1 );
+            efeRaw[2] = SX1280HalReadRegister( REG_LR_ESTIMATED_FREQUENCY_ERROR_MSB + 2 );
+            efe = ( efeRaw[0]<<16 ) | ( efeRaw[1]<<8 ) | efeRaw[2];
+            efe &= REG_LR_ESTIMATED_FREQUENCY_ERROR_MASK;
+
+            efeHz = 1.55 * ( double )SX1280complement2( efe, 20 ) / ( 1600.0 / ( double )SX1280GetLoRaBandwidth( ) * 1000.0 );
+            break;
+
+        case PACKET_TYPE_NONE:
+        case PACKET_TYPE_BLE:
+        case PACKET_TYPE_FLRC:
+        case PACKET_TYPE_GFSK:
+            break;
+    }
+
+    return efeHz;
+}
+*/
+
+/*
+uint16_t SX1280GetFirmwareVersion(void)
 {
     spi_buf.send_buf_8[0] = (uint8_t)(((uint16_t)REG_LR_FIRMWARE_VERSION_MSB >> 8) & 0x00FF);
     spi_buf.send_buf_8[1] = (uint8_t)((uint16_t)REG_LR_FIRMWARE_VERSION_MSB & 0x00FF);
 
     hspi_trans(RADIO_READ_REGISTER, 16, 24);
     uint16_t ver;
-    ver=spi_buf.recv_buf_8[1];
-    return ((ver << 8 ) | spi_buf.recv_buf_8[2]);
+    ver = spi_buf.recv_buf_8[1];
+    return ((ver << 8) | spi_buf.recv_buf_8[2]);
 }
 
 uint8_t SX1280GetLNARegime()
@@ -274,14 +402,24 @@ uint8_t SX1280GetLNARegime()
     hspi_trans(RADIO_READ_REGISTER, 16, 16);
     return spi_buf.recv_buf_8[1];
 }
+*/
+
 void SX1280_Init()
 {
-    gpio_init();
 
     hspi_init();
 
     SX1280Reset();
 
-    SX1280SetStandby(STDBY_XOSC);
+    SX1280SetStandby(STDBY_RC);
 
+    SX1280SetAutoFS(true);
+
+    SX1280SetRegulatorMode(USE_DCDC);
+
+    SX1280SetBufferBaseAddresses(txBaseAddress, rxBaseAddress);
+
+    SX1280SetDioIrqParams(IRQ_RADIO_ALL, IRQ_TX_DONE | IRQ_RX_DONE, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
+
+    SX1280SetStandby(STDBY_RC);
 }
