@@ -339,10 +339,11 @@ static void hspi_init()
     trans.mosi = (spi_buf.send_buf_32);
 }
 
-void SX1280SetLoraSyncWord(uint16_t SyncWord)
+void SX1280SetLoraSyncWord(uint8_t SyncWord_h, uint8_t SyncWord_l)
 {
     spi_buf.send_buf_16[0] =  REG_LORASYNCWORD;
-    spi_buf.send_buf_16[1] = SyncWord;
+    spi_buf.send_buf_8[2] = SyncWord_h;
+    spi_buf.send_buf_8[3] = SyncWord_l;
     hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
 }
 

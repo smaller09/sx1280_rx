@@ -15,7 +15,7 @@
 #include "driver/gpio.h"
 #define BIND_CHANNEL 96
 
-sx1280_buff_t DRAM_ATTR spi_buf;
+sx1280_buff_t DRAM_ATTR WORD_ALIGNED_ATTR spi_buf;
 
 static uint8_t lora_channel;
 
@@ -30,8 +30,6 @@ static uint8_t isbinded =0;
 static void rx_loop(void *arg)
 {
    
-
-
    while (1)
    {
       WDT_FEED();
@@ -43,15 +41,15 @@ static void rx_loop(void *arg)
 void radio_init()
 {
    nvs_handle_t status_handle;
-   bind_status_t bind_status;
-   bind_status.val = 0;
+   frame_struct_t bind_status;
+   
    isbinded = BIND_CHANNEL;
    if (nvs_open(RC_TABLE, NVS_READONLY, &status_handle) == ESP_OK)
    {
-      if (nvs_get_u32(status_handle, BIND_STATUS, &bind_status.val) == ESP_OK)
+      if (nvs_get_blob(status_handle, BIND_STATUS, &bind_status, sizeof(bind_status)) == ESP_OK)
       {
          isbinded = 0;
-         SX1280SetLoraSyncWord(bind_status.syncword);
+         SX1280SetLoraSyncWord(bind_status.last5byte.bind_info.sync_h, bind_status.last5byte.bind_info.sync_l );
       }
    }
    nvs_close(status_handle);
@@ -66,7 +64,7 @@ void radio_init()
    packetParams.PacketType = PACKET_TYPE_LORA;
    packetParams.Params.LoRa.PreambleLength = 12;
    modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_7;
-   if ((isbinded == BIND_CHANNEL) || (bind_status.rc_mode == LLMODE))
+   if ((isbinded == BIND_CHANNEL) || (bind_status.frame_header.telemetry == LLMODE))
    {
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF7;
       packetParams.Params.LoRa.PayloadLength = 14;
