@@ -208,6 +208,12 @@ typedef void(DioIrqHandler)(void);
 #define REG_MANUAL_GAIN_VALUE 0x089E
 #define MASK_MANUAL_GAIN_VALUE 0xF0
 
+
+#define REG_LORASYNCWORD 0x944
+#define REG_LORAMAGICNUM 0x925
+#define LORA_MAGICNUMBER 0x37
+
+
 /*!
  * \brief Selector values to configure LNA regime
  */
@@ -1344,6 +1350,10 @@ int8_t SX1280GetRssiInst(void);
  */
 void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask);
 
+void SX1280SetLoraSyncWord(uint16_t SyncWord);
+
+void SX1280SetLoraMagicNum(uint8_t MagicNum);
+
 /*!
  * \brief Returns the current IRQ status
  *
@@ -1662,6 +1672,6 @@ int8_t SX1280GetHexFileLineFields(char *line, uint8_t *bytes, uint16_t *addr, ui
 
 void SX1280_Init();
 
-uint8_t SX1280GetLNARegime();
+//uint8_t SX1280GetLNARegime();
 
 #endif // __SX1280_H__

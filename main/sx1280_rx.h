@@ -1,3 +1,56 @@
+/*    Protocol description:
+
+
+ 2.4Ghz LORA modulation
+
+  Operation modes:
+  
+# RATE_LORA_100HZ
+- LORA modulation
+- Frame rate 100 HZ (10ms)
+- Data Rate ~44kb/s (-112dBm)
+- Bw-812 ; SF7 ; CR - LI - 4/7 
+- Preamble 12 symbols
+- Fixed length packet format(implicit)->14 bytes
+
+# RATE_LORA_50HZ 
+- LORA modulation
+- Frame rate 50 HZ (20ms)
+- Data Rate ~25kb/s (-115dBm)
+- Bw-812 ; SF8 ; CR - LI - 4/7 
+- Preamble 12 symbols
+- Fixed length packet format(implicit)->18 bytes
+
+telemetry rate (1:8)
+
+   #  bind frame (channel 96), LCG would not using 96 channel
+       ----------------------------------------------------
+    0. - bits 7..6 = reserve (2 bits)
+       - bits 5..4 = next expected telemetry down link frame counter(sequence) (2 bits=4 val)
+       - bit 3     = Flag EU LBT
+       - bits 2..0 = Frame type (3 bits)
+    1. txid1 TXID on 16 bits
+    2. txid2
+    3. - bit 7     = flag next frame must be dwn tlm frame
+       - bit 6     = flag requesing starting WIFI
+       - bits 5..0 = Model ID /Rx_Num (6 bits) 
+    4. channels 8 channels/frame ; 11bits/channel
+    5. channels total 11 bytes of channels data in the packet frame
+    6. channels
+    7. channels
+    8. channels
+    9. channels
+    10. channels
+    11. channels
+    12. channels
+    13. channels
+    14. channels
+   
+
+
+
+*/
+
 #ifndef __SX1280_RX_H__
 #define __SX1280_RX_H__
 #include <stdio.h>

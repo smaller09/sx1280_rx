@@ -272,7 +272,6 @@ void SX1280SetRfFrequency(uint8_t channel)
     spi_buf.send_buf_8[0] = fhss_freq[channel][0];
     spi_buf.send_buf_8[1] = fhss_freq[channel][1];
     spi_buf.send_buf_8[2] = fhss_freq[channel][2];
-    ;
     hspi_trans(RADIO_SET_RFFREQUENCY, 24, 0);
 }
 
@@ -338,6 +337,20 @@ static void hspi_init()
     trans.addr = NULL;
     trans.miso = (spi_buf.recv_buf_32);
     trans.mosi = (spi_buf.send_buf_32);
+}
+
+void SX1280SetLoraSyncWord(uint16_t SyncWord)
+{
+    spi_buf.send_buf_16[0] =  REG_LORASYNCWORD;
+    spi_buf.send_buf_16[1] = SyncWord;
+    hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
+}
+
+void SX1280SetLoraMagicNum(uint8_t MagicNum)
+{
+    spi_buf.send_buf_16[0] =  REG_LORAMAGICNUM;
+    spi_buf.send_buf_8[2] = MagicNum;
+    hspi_trans(RADIO_WRITE_REGISTER, 24, 0);
 }
 
 /*

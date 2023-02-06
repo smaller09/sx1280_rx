@@ -29,6 +29,9 @@ static uint8_t isbinded =0;
 
 static void rx_loop(void *arg)
 {
+   
+
+
    while (1)
    {
       WDT_FEED();
@@ -48,6 +51,7 @@ void radio_init()
       if (nvs_get_u32(status_handle, BIND_STATUS, &bind_status.val) == ESP_OK)
       {
          isbinded = 0;
+         SX1280SetLoraSyncWord(bind_status.syncword);
       }
    }
    nvs_close(status_handle);
@@ -61,17 +65,17 @@ void radio_init()
    packetParams.Params.LoRa.HeaderType = LORA_PACKET_IMPLICIT;
    packetParams.PacketType = PACKET_TYPE_LORA;
    packetParams.Params.LoRa.PreambleLength = 12;
+   modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_7;
    if ((isbinded == BIND_CHANNEL) || (bind_status.rc_mode == LLMODE))
    {
-      modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_5;
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF7;
-      packetParams.Params.LoRa.PayloadLength = 6;
+      packetParams.Params.LoRa.PayloadLength = 14;
    }
    else
    {
-      modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_7;
+      
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF8;
-      packetParams.Params.LoRa.PayloadLength = 16;
+      packetParams.Params.LoRa.PayloadLength = 18;
    }
 
    SX1280SetPacketType(modulationParams.PacketType);
@@ -79,6 +83,8 @@ void radio_init()
    SX1280SetModulationParams(&modulationParams);
 
    SX1280SetPacketParams(&packetParams);
+
+   SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
 
    SX1280SetRfFrequency(isbinded);
    
