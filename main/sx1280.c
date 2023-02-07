@@ -278,8 +278,9 @@ void SX1280SetRfFrequency(uint8_t channel)
 void SX1280Reset(void)
 {
     gpio_set_level(GPIO_NUM_2, 0);
-    vTaskDelay(5);
+    vTaskDelay(1);
     gpio_set_level(GPIO_NUM_2, 1);
+    vTaskDelay(1);
 }
 
 RadioStatus_t SX1280GetStatus(void)
@@ -433,7 +434,7 @@ void SX1280_Init()
 
     SX1280SetBufferBaseAddresses(txBaseAddress, rxBaseAddress);
 
-    SX1280SetDioIrqParams(IRQ_RADIO_ALL, IRQ_TX_DONE | IRQ_RX_DONE, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
+    SX1280SetDioIrqParams(IRQ_RADIO_ALL, IRQ_TX_DONE | IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
 
     SX1280SetStandby(STDBY_RC);
 }

@@ -12,12 +12,13 @@
 #include "serial.h"
 #include "ota.h"
 #include "nvs.h"
+#include "nvs_flash.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 #define BIND_CHANNEL 96
+#define BIND_INFO_SIZE 16 //sizeof(bind_status)
 
 sx1280_buff_t DRAM_ATTR WORD_ALIGNED_ATTR spi_buf;
-
-static uint8_t lora_channel;
 
 static const char *RC_TABLE = "RC_TABLE";
 // struct BIND_STATUS
@@ -25,15 +26,27 @@ static const char *BIND_STATUS = "BIND_STATUS";
 
 static const char *TAG = "sx1280_rx";
 
-static uint8_t isbinded =0;
+static TickTime_t rxTimeout;
+static TickTime_t txTimeout;
+
+static uint8_t fhss_step;
+
+static uint8_t fhss_ch = 96;
+
+static bool islinked=false;
+
+static bool unbinded = true;
+
+static bool led=true;
+
+frame_struct_t DRAM_ATTR frame_struct;
 
 static void rx_loop(void *arg)
 {
-   
    while (1)
    {
       WDT_FEED();
-      vTaskDelay(10);
+      vTaskDelay(1000);
    }
    vTaskDelete(NULL);
 }
@@ -41,18 +54,21 @@ static void rx_loop(void *arg)
 void radio_init()
 {
    nvs_handle_t status_handle;
-   frame_struct_t bind_status;
-   
-   isbinded = BIND_CHANNEL;
+   ESP_ERROR_CHECK(nvs_flash_init());
    if (nvs_open(RC_TABLE, NVS_READONLY, &status_handle) == ESP_OK)
    {
-      if (nvs_get_blob(status_handle, BIND_STATUS, &bind_status, sizeof(bind_status)) == ESP_OK)
+      ESP_LOGI(TAG, "NVS Opened!");
+      size_t nvs_bind_size = BIND_INFO_SIZE;
+      if (nvs_get_blob(status_handle, BIND_STATUS, &frame_struct, &nvs_bind_size) == ESP_OK)
       {
-         isbinded = 0;
-         SX1280SetLoraSyncWord(bind_status.last5byte.bind_info.sync_h, bind_status.last5byte.bind_info.sync_l );
+         unbinded = false;
+         SX1280SetLoraSyncWord(frame_struct.last5byte.bind_info.sync_h, frame_struct.last5byte.bind_info.sync_l);
+         fhss_step = frame_struct.last5byte.bind_info.rx_num;
+         fhss_ch = 0;
       }
    }
    nvs_close(status_handle);
+
    ModulationParams_t modulationParams;
    PacketParams_t packetParams;
    modulationParams.PacketType = PACKET_TYPE_LORA;
@@ -62,35 +78,43 @@ void radio_init()
    packetParams.Params.LoRa.InvertIQ = LORA_IQ_NORMAL;
    packetParams.Params.LoRa.HeaderType = LORA_PACKET_IMPLICIT;
    packetParams.PacketType = PACKET_TYPE_LORA;
-   packetParams.Params.LoRa.PreambleLength = 12;
+   packetParams.Params.LoRa.PreambleLength = 0x23; //preamble length preamble length = LORA_PBLE_LEN_MANT*2^(LORA_PBLE_LEN_EXP)
    modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_7;
-   if ((isbinded == BIND_CHANNEL) || (bind_status.frame_header.telemetry == LLMODE))
+   if ((unbinded) || (frame_struct.frame_header.telemetry == LLMODE))
    {
+      ESP_LOGI(TAG, "BIND_STATUS no set!");
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF7;
-      packetParams.Params.LoRa.PayloadLength = 14;
+      packetParams.Params.LoRa.PayloadLength = 12;
    }
    else
    {
       
-      modulationParams.Params.LoRa.SpreadingFactor = LORA_SF8;
-      packetParams.Params.LoRa.PayloadLength = 18;
+      modulationParams.Params.LoRa.SpreadingFactor = LORA_SF8; //LRmode
+      packetParams.Params.LoRa.PayloadLength = 16;
    }
 
+
+
    SX1280SetPacketType(modulationParams.PacketType);
+      
+   SX1280SetRfFrequency(fhss_ch);
 
    SX1280SetModulationParams(&modulationParams);
 
    SX1280SetPacketParams(&packetParams);
 
    SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
+}
 
-   SX1280SetRfFrequency(isbinded);
+void radio_start()
+{
    
 }
 
 void dio_isr_handler(void* arg)
 {
     //need to complete
+    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
 }
 
 static void gpio_init()
@@ -125,6 +149,23 @@ static void gpio_init()
    gpio_set_level(GPIO_NUM_2, 1);
 }
 
+void led_loop()
+{
+   while (1)
+   {
+      if (unbinded)
+      {
+         vTaskDelay(500);
+         led = !led;
+      }
+      else
+      {
+         vTaskDelay(10);
+         led = islinked;
+      }
+      gpio_set_level(GPIO_NUM_16, led);
+   }
+}
 
 void app_main()
 {
@@ -133,13 +174,15 @@ void app_main()
 
    gpio_init();
 
-   radio_init();
-
    SX1280_Init();
 
-   vTaskDelay(5);
+   radio_init();
 
+   radio_start();
+   
    esp_task_wdt_init();
+
+   xTaskCreate(led_loop, "ledloop", configMINIMAL_STACK_SIZE, NULL, 6, NULL);
 
    xTaskCreate(rx_loop, "mainloop", 1024, NULL, 10, NULL);
 }

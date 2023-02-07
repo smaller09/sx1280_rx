@@ -436,6 +436,7 @@ static void ota_task(void *pvParameter)
     }
     ESP_LOGI(TAG, "OTA finished");
     ota_end = 1;
+    close(socket_id);
     (void)vTaskDelete(NULL);
     while (1)
         vTaskDelay(10);
