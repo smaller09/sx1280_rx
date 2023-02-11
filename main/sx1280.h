@@ -1284,7 +1284,7 @@ void SX1280SetRfFrequency(uint8_t channel);
  * \param [in]  power         RF output power [-18..13] dBm
  * \param [in]  rampTime      Transmission ramp up time
  */
-void SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime);
+void SX1280SetTxParams(uint8_t power, RadioRampTimes_t rampTime);
 
 /*!
  * \brief Sets the number of symbols to be used for Channel Activity
@@ -1350,7 +1350,7 @@ int8_t SX1280GetRssiInst(void);
  */
 void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask);
 
-void SX1280SetLoraSyncWord(uint8_t SyncWord_h, uint8_t SyncWord_l);
+void SX1280SetLoraSyncWord(uint16_t SyncWord);
 
 void SX1280SetLoraMagicNum(uint8_t MagicNum);
 
@@ -1436,7 +1436,7 @@ void SX1280SetPayload(uint8_t *payload, uint8_t size);
  * \param [out] size          A pointer to the size of the payload received
  * \param [in]  maxSize       The maximal size allowed to copy into the buffer
  */
-uint8_t SX1280GetPayload(uint8_t size);
+void SX1280GetPayload(uint8_t size);
 
 /*!
  * \brief Sends a payload

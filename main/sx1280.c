@@ -146,16 +146,10 @@ static void hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
     spi_trans(HSPI_HOST, &trans);
 }
 
-uint8_t SX1280GetPayload(uint8_t size)
+void SX1280GetPayload(uint8_t size)
 {
-
-    hspi_trans(RADIO_GET_RXBUFFERSTATUS, 0, 24);
-
-    if (spi_buf.recv_buf_8[1] != size)
-        return 1;
     spi_buf.send_buf_8[0] = txBaseAddress;
     hspi_trans(RADIO_READ_BUFFER, 8, (size + 1) * 8);
-    return 0;
 }
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
 void SX1280SetRx(TickTime_t timeout)
@@ -251,12 +245,12 @@ void SX1280SetBufferBaseAddresses(uint8_t txBaseAddress, uint8_t rxBaseAddress)
     hspi_trans(RADIO_SET_BUFFERBASEADDRESS, 16, 0);
 }
 
-void SX1280SetTxParams(int8_t power, RadioRampTimes_t rampTime)
+void SX1280SetTxParams(uint8_t power, RadioRampTimes_t rampTime)
 {
 
     // The power value to send on SPI/UART is in the range [0..31] and the
     // physical output power is in the range [-18..13]dBm
-    spi_buf.send_buf_8[0] = power + 18;
+    spi_buf.send_buf_8[0] = power;
     spi_buf.send_buf_8[1] = (uint8_t)rampTime;
     hspi_trans(RADIO_SET_TXPARAMS, 16, 0);
 }
@@ -340,11 +334,10 @@ static void hspi_init()
     trans.mosi = (spi_buf.send_buf_32);
 }
 
-void SX1280SetLoraSyncWord(uint8_t SyncWord_h, uint8_t SyncWord_l)
+void SX1280SetLoraSyncWord(uint16_t SyncWord)
 {
     spi_buf.send_buf_16[0] =  REG_LORASYNCWORD;
-    spi_buf.send_buf_8[2] = SyncWord_h;
-    spi_buf.send_buf_8[3] = SyncWord_l;
+    spi_buf.send_buf_16[1] = SyncWord;
     hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
 }
 

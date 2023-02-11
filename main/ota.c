@@ -568,6 +568,5 @@ void ota_init()
     }
     while (ota_end==false)
         vTaskDelay(10);
-    vTaskDelay(10);
     closewifi();
 }
