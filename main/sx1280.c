@@ -24,7 +24,7 @@
 
 extern sx1280_buff_t spi_buf;
 
-static const uint8_t txBaseAddress = 0x00, rxBaseAddress = 0x80;
+
 
 /*      frequency = 2400000000 + 1000000 * i;
         freq = (uint32_t)((double)frequency / (double)FREQ_STEP);
@@ -136,7 +136,7 @@ static const DRAM_ATTR uint8_t fhss_freq[101][3] = {
     {0xc0, 0x4e, 0xc4},
 };
 
-spi_trans_t trans;
+static spi_trans_t trans;
 
 static void hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
 {
@@ -144,22 +144,58 @@ static void hspi_trans(uint16_t cmd, uint8_t dout_bits, uint8_t din_bits)
     trans.bits.mosi = dout_bits;
     trans.bits.miso = din_bits;
     spi_trans(HSPI_HOST, &trans);
+    while (gpio_get_level(GPIO_NUM_5))
+        ;
 }
+
+void SX1280GetRxBufferStatus(uint8_t *payloadLength, uint8_t *rxStartBuffer)
+{
+    hspi_trans(RADIO_GET_RXBUFFERSTATUS, 0, 24);
+    *payloadLength = spi_buf.send_buf_8[1];
+    *rxStartBuffer = spi_buf.send_buf_8[2];
+}
+
+void SX1280GetPacketStatus( PacketStatus_t *pktStatus )
+{
+    hspi_trans( RADIO_GET_PACKETSTATUS, 0, 48 );
+
+    pktStatus->packetType = PACKET_TYPE_LORA;
+
+
+            pktStatus->Params.LoRa.RssiPkt = -spi_buf.recv_buf_8[1] / 2;
+            ( spi_buf.recv_buf_8[2] < 128 ) ? ( pktStatus->Params.LoRa.SnrPkt = spi_buf.recv_buf_8[2] / 4 ) : ( pktStatus->Params.LoRa.SnrPkt = ( ( spi_buf.recv_buf_8[2] - 256 ) /4 ) );
+
+            pktStatus->Params.LoRa.ErrorStatus.SyncError = ( spi_buf.recv_buf_8[3] >> 6 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.LengthError = ( spi_buf.recv_buf_8[3] >> 5 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.CrcError = ( spi_buf.recv_buf_8[3] >> 4 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.AbortError = ( spi_buf.recv_buf_8[3] >> 3 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.HeaderReceived = ( spi_buf.recv_buf_8[3] >> 2 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.PacketReceived = ( spi_buf.recv_buf_8[3] >> 1 ) & 0x01;
+            pktStatus->Params.LoRa.ErrorStatus.PacketControlerBusy = spi_buf.recv_buf_8[3] & 0x01;
+
+            pktStatus->Params.LoRa.TxRxStatus.RxNoAck = ( spi_buf.recv_buf_8[4] >> 5 ) & 0x01;
+            pktStatus->Params.LoRa.TxRxStatus.PacketSent = spi_buf.recv_buf_8[4] & 0x01;
+
+            pktStatus->Params.LoRa.SyncAddrStatus = spi_buf.recv_buf_8[5] & 0x07;
+
+    }
+
 
 void SX1280GetPayload(uint8_t size)
 {
-    spi_buf.send_buf_8[0] = txBaseAddress;
-    hspi_trans(RADIO_READ_BUFFER, 8, (size + 1) * 8);
+    spi_buf.send_buf_8[0] = rxBaseAddress;
+    spi_buf.send_buf_8[1] = 0;
+    hspi_trans(RADIO_READ_BUFFER, 16, (size) * 8);
 }
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
 void SX1280SetRx(TickTime_t timeout)
 {
 
     spi_buf.send_buf_8[0] = timeout.Step;
-    spi_buf.send_buf_8[1] = (uint8_t)((timeout.NbSteps >> 8) & 0x00FF);
-    spi_buf.send_buf_8[2] = (uint8_t)(timeout.NbSteps & 0x00FF);
+    spi_buf.send_buf_8[1] = (uint8_t)(timeout.NbSteps >> 8);
+    spi_buf.send_buf_8[2] = (uint8_t)(timeout.NbSteps & 0xFF);
 
-    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+    // SX1280ClearIrqStatus(IRQ_RADIO_ALL);
 
     hspi_trans(RADIO_SET_RX, 24, 0);
 }
@@ -167,8 +203,8 @@ void SX1280SetRx(TickTime_t timeout)
 void SX1280ClearIrqStatus(uint16_t irq)
 {
 
-    spi_buf.send_buf_8[0] = (uint8_t)(((uint16_t)irq >> 8) & 0x00FF);
-    spi_buf.send_buf_8[1] = (uint8_t)((uint16_t)irq & 0x00FF);
+    spi_buf.send_buf_8[0] = (uint8_t)((uint16_t)irq >> 8);
+    spi_buf.send_buf_8[1] = (uint8_t)((uint16_t)irq & 0xFF);
 
     hspi_trans(RADIO_CLR_IRQSTATUS, 16, 0);
 }
@@ -178,10 +214,10 @@ void SX1280SetTx(TickTime_t timeout)
 {
 
     spi_buf.send_buf_8[0] = timeout.Step;
-    spi_buf.send_buf_8[1] = (uint8_t)((timeout.NbSteps >> 8) & 0x00FF);
-    spi_buf.send_buf_8[2] = (uint8_t)(timeout.NbSteps & 0x00FF);
+    spi_buf.send_buf_8[1] = (uint8_t)(timeout.NbSteps >> 8);
+    spi_buf.send_buf_8[2] = (uint8_t)(timeout.NbSteps & 0xFF);
 
-    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+    // SX1280ClearIrqStatus(IRQ_RADIO_ALL);
 
     hspi_trans(RADIO_SET_TX, 24, 0);
 }
@@ -234,14 +270,14 @@ void SX1280SetPacketParams(PacketParams_t *packetParams)
     spi_buf.send_buf_8[5] = 0;
     spi_buf.send_buf_8[6] = 0;
 
-    hspi_trans(RADIO_SET_PACKETPARAMS, 48, 0);
+    hspi_trans(RADIO_SET_PACKETPARAMS, 56, 0);
 }
 
-void SX1280SetBufferBaseAddresses(uint8_t txBaseAddress, uint8_t rxBaseAddress)
+void SX1280SetBufferBaseAddresses(uint8_t txBase, uint8_t rxBase)
 {
 
-    spi_buf.send_buf_8[0] = txBaseAddress;
-    spi_buf.send_buf_8[1] = rxBaseAddress;
+    spi_buf.send_buf_8[0] = txBase;
+    spi_buf.send_buf_8[1] = rxBase;
     hspi_trans(RADIO_SET_BUFFERBASEADDRESS, 16, 0);
 }
 
@@ -269,12 +305,13 @@ void SX1280SetRfFrequency(uint8_t channel)
     hspi_trans(RADIO_SET_RFFREQUENCY, 24, 0);
 }
 
+
+
 void SX1280Reset(void)
 {
     gpio_set_level(GPIO_NUM_2, 0);
     vTaskDelay(1);
     gpio_set_level(GPIO_NUM_2, 1);
-    vTaskDelay(1);
 }
 
 RadioStatus_t SX1280GetStatus(void)
@@ -289,24 +326,26 @@ uint16_t SX1280GetIrqStatus(void)
 {
     // SX1280HalReadCommand( RADIO_GET_IRQSTATUS, irqStatus, 2 );
     hspi_trans(RADIO_GET_IRQSTATUS, 0, 24);
-    return (spi_buf.recv_buf_8[1] << 8) | spi_buf.recv_buf_8[2];
+    uint16_t val = 0;
+    val = spi_buf.recv_buf_8[1];
+    val = (val << 8) | spi_buf.recv_buf_8[2];
+    return val;
 }
 
 void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask)
 {
 
-    spi_buf.send_buf_8[0] = (uint8_t)((irqMask >> 8) & 0x00FF);
-    spi_buf.recv_buf_8[1] = (uint8_t)(irqMask & 0x00FF);
-    spi_buf.recv_buf_8[2] = (uint8_t)((dio1Mask >> 8) & 0x00FF);
-    spi_buf.recv_buf_8[3] = (uint8_t)(dio1Mask & 0x00FF);
-    spi_buf.recv_buf_8[4] = (uint8_t)((dio2Mask >> 8) & 0x00FF);
-    spi_buf.recv_buf_8[5] = (uint8_t)(dio2Mask & 0x00FF);
-    spi_buf.recv_buf_8[6] = (uint8_t)((dio3Mask >> 8) & 0x00FF);
-    spi_buf.recv_buf_8[7] = (uint8_t)(dio3Mask & 0x00FF);
+    spi_buf.send_buf_8[0] = (uint8_t)(irqMask >> 8);
+    spi_buf.send_buf_8[1] = (uint8_t)(irqMask & 0xFF);
+    spi_buf.send_buf_8[2] = (uint8_t)(dio1Mask >> 8);
+    spi_buf.send_buf_8[3] = (uint8_t)(dio1Mask & 0xFF);
+    spi_buf.send_buf_8[4] = (uint8_t)(dio2Mask >> 8);
+    spi_buf.send_buf_8[5] = (uint8_t)(dio2Mask & 0xFF);
+    spi_buf.send_buf_8[6] = (uint8_t)(dio3Mask >> 8);
+    spi_buf.send_buf_8[7] = (uint8_t)(dio3Mask & 0xFF);
 
     hspi_trans(RADIO_SET_DIOIRQPARAMS, 64, 0);
 }
-
 
 static void hspi_init()
 {
@@ -334,16 +373,19 @@ static void hspi_init()
     trans.mosi = (spi_buf.send_buf_32);
 }
 
-void SX1280SetLoraSyncWord(uint16_t SyncWord)
+void SX1280SetLoraSyncWord(uint16_t Syncword)
 {
-    spi_buf.send_buf_16[0] =  REG_LORASYNCWORD;
-    spi_buf.send_buf_16[1] = SyncWord;
+    spi_buf.send_buf_8[0] = (uint8_t)(REG_LORASYNCWORD >> 8);
+    spi_buf.send_buf_8[1] = (uint8_t)(REG_LORASYNCWORD & 0xff);
+    spi_buf.send_buf_8[2] = (uint8_t)(Syncword >> 8);
+    spi_buf.send_buf_8[3] = (uint8_t)(Syncword & 0xff);
     hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
 }
 
 void SX1280SetLoraMagicNum(uint8_t MagicNum)
 {
-    spi_buf.send_buf_16[0] =  REG_LORAMAGICNUM;
+    spi_buf.send_buf_8[0] = (uint8_t)(REG_LORAMAGICNUM >> 8);
+    spi_buf.send_buf_8[1] = (uint8_t)(REG_LORAMAGICNUM & 0xff);
     spi_buf.send_buf_8[2] = MagicNum;
     hspi_trans(RADIO_WRITE_REGISTER, 24, 0);
 }
@@ -419,15 +461,11 @@ void SX1280_Init()
 
     SX1280Reset();
 
-    SX1280SetStandby(STDBY_RC);
-
-    SX1280SetAutoFS(true);
+    SX1280SetStandby(STDBY_XOSC);
 
     SX1280SetRegulatorMode(USE_DCDC);
 
-    SX1280SetBufferBaseAddresses(txBaseAddress, rxBaseAddress);
+    SX1280SetAutoFS(true);
 
-    SX1280SetDioIrqParams(IRQ_RADIO_ALL, IRQ_TX_DONE | IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
-
-    SX1280SetStandby(STDBY_RC);
+    SX1280SetStandby(STDBY_XOSC);
 }

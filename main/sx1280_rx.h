@@ -35,7 +35,7 @@ typedef union
    struct
    {
       uint8_t telemetry : 1; // frame_mode in bind frame
-      uint8_t ch16 : 1;      // ARM 
+      uint8_t ch16 : 1;      // ARM
       uint8_t ch13 : 2;      // Aux
       uint8_t ch14 : 2;      // Aux
       uint8_t ch15 : 2;      // Aux
@@ -59,11 +59,12 @@ typedef union
 {
    struct
    {
-      uint8_t failsafe : 2; //failsafe mode
+      uint8_t failsafe : 2; // failsafe mode
       uint8_t rx_num : 6;
       uint8_t sbus : 1;
       uint8_t sbus_inv : 1;
-      uint8_t reserved : 6;
+      uint8_t frame_mode : 2;
+      uint8_t reserved : 4;
    };
    uint16_t val;
 } bind_info_t;
@@ -72,8 +73,8 @@ typedef union
 {
    struct
    {
-      uint8_t sync_h;
-      uint8_t sync_l;
+      uint8_t sync1;
+      uint8_t sync2;
    };
    uint16_t val;
 } syncword_t;
@@ -97,14 +98,6 @@ typedef struct
 } frame_struct_t;
 
 #define BIND_CHANNEL 96
-#define FRAME_SIZE 16 //sizeof(bind_status)
+#define FRAME_SIZE 16 // sizeof(bind_status)
 
 #endif //__SX1280_RX_H__
-
-static void setbind();
-
-static void procces_bind_frame();
-
-void radio_setparam();
-
-static void frameproc();

@@ -28,7 +28,7 @@ telemetry rate (1:8)
 #  bind frame (channel 96), LCG would not using 96 channel 16bytes
     ----------------------------------------------------
     0.
-       - bit 7     = frame mode (0:llmode, 1:lrmode)
+       - bit 7     =  0 next frame will be normal, 1: next frame will be telemetry //not used in bind
        - bit 6     = channel 16 (arm) failsafe
        - bits 5..4 =  Aux channel (2 bit channel13) failsafe
        - bits 3..2 =  Aux channel (2 bit channel14) failsafe
@@ -54,7 +54,9 @@ telemetry rate (1:8)
     13. 
        - bit 7     = 0:sbus output, 1: crsf output.
        - bit 6     = 0:sbus normal, 1: sbus inverted.
-       - bit 5..0  = reserved
+       - bit 5..4  = 00 LLmode 01 LR mode (16byte)
+                     10 ULLmode 11 ULRmode (12byte) //not now
+       - bit 3..0  = reserved
     14. sync word (uint16)
     15. sync word
 
