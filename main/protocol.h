@@ -28,11 +28,11 @@ telemetry rate (1:8)
 #  bind frame (channel 96), LCG would not using 96 channel 16bytes
     ----------------------------------------------------
     0.
-       - bit 7     =  0 next frame will be normal, 1: next frame will be telemetry //not used in bind
-       - bit 6     = channel 16 (arm) failsafe
-       - bits 5..4 =  Aux channel (2 bit channel13) failsafe
-       - bits 3..2 =  Aux channel (2 bit channel14) failsafe
-       - bits 1..0 =  Aux channel (2 bit channel15) failsafe
+       - bit 0     =  0 next frame will be normal, 1: next frame will be telemetry //not used in bind
+       - bit 1     = channel 16 (arm) failsafe
+       - bits 2..3 =  Aux channel (2 bit channel13) failsafe
+       - bits 4..5 =  Aux channel (2 bit channel14) failsafe
+       - bits 6..7 =  Aux channel (2 bit channel15) failsafe
     1. channels   10bit/channel channel 1-8 failsafe
     2. channels
     3. channels
@@ -44,19 +44,19 @@ telemetry rate (1:8)
     9. channels
     10. channels
     11.  fail safe for 9-12 (current only support Max/Mid/Min)      
-       - bits 7..6 =  Aux channel  (2 bit channel9) 
-       - bits 5..4 =  Aux channel  (2 bit channel10)
-       - bits 3..2 =  Aux channel  (2 bit channel11)
-       - bits 1..0 =  Aux channel  (2 bit channel12)
+       - bits 0..1 =  Aux channel  (2 bit channel9) 
+       - bits 2..3 =  Aux channel  (2 bit channel10)
+       - bits 4..5 =  Aux channel  (2 bit channel11)
+       - bits 6..7 =  Aux channel  (2 bit channel12)
     12.
-       - bits 7..6 = failsafe mode 00: Hold, 01:No pulses, 10: Custom, 11: Receiver
-       - bit  5..0 = Rx_Num (6 bits) /FHSS Hope Step = Rx_Num+1.
+       - bits 0..1 = failsafe mode 00: Hold, 01:No pulses, 10: Custom, 11: Receiver
+       - bit  2..7 = Rx_Num (6 bits) /FHSS Hope Step = Rx_Num+1.
     13. 
-       - bit 7     = 0:sbus output, 1: crsf output.
-       - bit 6     = 0:sbus normal, 1: sbus inverted.
-       - bit 5..4  = 00 LLmode 01 LR mode (16byte)
+       - bit 0     = 0:sbus output, 1: crsf output.
+       - bit 1     = 0:sbus normal, 1: sbus inverted.
+       - bit 2..3  = 00 LLmode 01 LR mode (16byte)
                      10 ULLmode 11 ULRmode (12byte) //not now
-       - bit 3..0  = reserved
+       - bit 4..7  = reserved
     14. sync word (uint16)
     15. sync word
 

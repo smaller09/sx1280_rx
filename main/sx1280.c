@@ -379,6 +379,7 @@ void SX1280SetLoraSyncWord(uint16_t Syncword)
     spi_buf.send_buf_8[1] = (uint8_t)(REG_LORASYNCWORD & 0xff);
     spi_buf.send_buf_8[2] = (uint8_t)(Syncword >> 8);
     spi_buf.send_buf_8[3] = (uint8_t)(Syncword & 0xff);
+//    spi_buf.send_buf_16[1]=Syncword;
     hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
 }
 

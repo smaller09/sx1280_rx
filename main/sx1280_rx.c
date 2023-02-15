@@ -18,6 +18,8 @@
 #include "driver/hw_timer.h"
 #include "esp_system.h"
 
+#define IRQERR (IRQ_CRC_ERROR | IRQ_SYNCWORD_ERROR)
+
 sx1280_buff_t DRAM_ATTR WORD_ALIGNED_ATTR spi_buf;
 
 static const char *RC_TABLE = "RC_TABLE";
@@ -26,21 +28,19 @@ static const char *BIND_STATUS = "BIND_STATUS";
 
 static const char *TAG = "sx1280_rx";
 
-static uint8_t fhss_step;
+static volatile uint8_t fhss_ch = BIND_CHANNEL;
 
-static uint8_t fhss_ch = BIND_CHANNEL;
+static volatile bool islinked = false;
 
-static bool islinked = false;
+static volatile bool unbinded = true;
 
-static bool unbinded = true;
+static volatile bool led = true;
 
-static bool led = true;
+static volatile bool frame_ok = false;
 
-static bool frame_ok = false;
+static volatile bool telemetry;
 
-static bool telemetry;
-
-static uint8_t frame_mode;
+static volatile uint8_t frame_mode;
 
 static uint8_t err_count_max;
 
@@ -48,15 +48,15 @@ static TaskHandle_t rxloop_h = NULL;
 
 static TaskHandle_t frameproc_h;
 
-frame_struct_t DRAM_ATTR rc_frame;
+frame_struct_t volatile DRAM_ATTR rc_frame;
 
-frame_struct_t DRAM_ATTR failsafe_frame;
+frame_struct_t volatile DRAM_ATTR failsafe_frame;
 
-TickTime_t frame_interval;
+static uint32_t time_interval;
 
-uint32_t time_interval;
-uint32_t irq_count = 0;
+static uint32_t frame_interval;
 
+static volatile uint8_t frame_err_count;
 #define DEBUG
 // #undef DEBUG
 
@@ -71,6 +71,9 @@ void dio_isr_handler(void *arg)
 void timercb()
 {
    BaseType_t content_switch = pdFALSE;
+   /*
+   hw_timer_disarm();
+   hw_timer_set_load_data(0);*/
    vTaskNotifyGiveFromISR(rxloop_h, &content_switch);
    if (content_switch)
       portYIELD_FROM_ISR();
@@ -114,6 +117,20 @@ void radio_setparam()
    SX1280SetDioIrqParams(IRQ_RADIO_ALL, (IRQ_TX_DONE | IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT), IRQ_RADIO_NONE, IRQ_RADIO_NONE);
 
    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+
+   switch (frame_mode) // only 2 mode support now.
+   {
+   case 0:
+      err_count_max = 200;
+      time_interval = 250;
+      frame_interval = 9700;
+      break;
+   case 1:
+      err_count_max = 100;
+      time_interval = 2650;
+      frame_interval = 17300;
+      break;
+   }
 }
 
 static void setbind()
@@ -131,24 +148,11 @@ static void procces_bind_frame()
 {
    unbinded = false;
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(rc_frame.last5ch.syncword.sync1);
+   SX1280SetLoraSyncWord(rc_frame.last5ch.syncword.val);
    fhss_ch = rc_frame.last5ch.bind_info.rx_num;
    frame_mode = rc_frame.last5ch.bind_info.frame_mode; // frame mode in the telemetry bit.
    frame_mode &= 1;
-   frame_interval.Step = RADIO_TICK_SIZE_0015_US;
-   switch (frame_mode) // only 2 mode support now.
-   {
-   case 0:
-      frame_interval.NbSteps = 1143;
-      err_count_max = 100;
-      time_interval = 2845;
-      break;
-   case 1:
-      frame_interval.NbSteps = 636;
-      err_count_max = 200;
-      time_interval = 450;
-      break;
-   }
+
    if (rc_frame.last5ch.bind_info.failsafe == 3)
    {
 
@@ -190,6 +194,10 @@ static void procces_bind_frame()
       failsafe_frame.last5ch.ch9_12[4] = (uint8_t)(tmp & 0xff);
    }
    ESP_LOGI(TAG, "bind status read!");
+   ESP_LOGI(TAG, "frame_mode: %d", frame_mode);
+   ESP_LOGI(TAG, "fhss_ch: %d", fhss_ch);
+   ESP_LOGI(TAG, "syncword %x", rc_frame.last5ch.syncword.val);
+   radio_setparam();
 }
 
 static void frameproc()
@@ -197,15 +205,24 @@ static void frameproc()
    while (1)
    {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
+      uint16_t irqstatus = SX1280GetIrqStatus();
+      ESP_LOGI(TAG, "IRQ Status %x", irqstatus);
+      SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+      if (irqstatus & IRQERR)
+      {
+         frame_ok = false;
+         continue;
+      }
       SX1280GetPayload(16);
-      memcpy(&rc_frame, &spi_buf.recv_buf_8[0], 16); // frame size
-#ifdef DEBUG
-      ESP_LOGI(TAG, "BIND Received");
-      for (uint8_t i = 0; i < 16; i++)
-         printf(" %x", spi_buf.recv_buf_8[i]);
+      memcpy(rc_frame.rcdata, &spi_buf.recv_buf_8[0], FRAME_SIZE); // frame size
+
+      islinked = true;
+      frame_ok = true;
+      // add some code to do RC
+      ESP_LOGI(TAG, "frame Received");
+      for (uint8_t i = 0; i < FRAME_SIZE; i++)
+         printf(" %x", rc_frame.rcdata[i]);
       printf("\n");
-#endif
    }
 }
 
@@ -214,129 +231,105 @@ static void rxloop(void *arg)
    uint32_t sx1280_notify;
    uint16_t bind_count = 0;
    uint8_t err_count = 0;
-
-   SX1280SetRx(RX_TX_SINGLE);
+   uint8_t frame_count = 0;
+   ESP_LOGI(TAG, "freq: %d", fhss_ch);
    while (1)
+
    {
-
-      sx1280_notify = ulTaskNotifyTake(pdTRUE, 10); // wait isr
-
+      SX1280SetRx(RX_TX_SINGLE);
+      sx1280_notify = ulTaskNotifyTake(pdTRUE, 10);
       if (sx1280_notify)
       {
          uint16_t irqstatus = SX1280GetIrqStatus();
-
          ESP_LOGI(TAG, "IRQ Status %x", irqstatus);
-
          SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+         if (irqstatus & IRQERR)
+            continue;
 
-         if (irqstatus & IRQ_CRC_ERROR)
+         if (unbinded)
          {
-            SX1280SetRx(RX_TX_SINGLE);
-            ESP_LOGI(TAG, "CRC ERROR %x", irqstatus & IRQ_CRC_ERROR);
+            SX1280GetPayload(FRAME_SIZE);
+            memcpy(rc_frame.rcdata, &spi_buf.recv_buf_8[0], FRAME_SIZE); // frame size
+            nvs_handle_t nvs_handle;
+            nvs_open(RC_TABLE, NVS_READWRITE, &nvs_handle);
+            ESP_LOGI(TAG, "NVS Opened!");
+            nvs_set_blob(nvs_handle, BIND_STATUS, rc_frame.rcdata, FRAME_SIZE);
+            ESP_LOGI(TAG, "Bind Status saved!");
+            nvs_commit(nvs_handle);
+            nvs_close(nvs_handle);
+            procces_bind_frame();
+            radio_setparam();
             continue;
          }
-         if (irqstatus & IRQ_RX_TX_TIMEOUT)
-         {
-            SX1280SetRx(RX_TX_SINGLE);
-            ESP_LOGI(TAG, "TIMEOUT %x", irqstatus & IRQ_RX_TX_TIMEOUT);
-            continue;
-         }
-         if (irqstatus & IRQ_SYNCWORD_ERROR)
-         {
-            SX1280SetRx(RX_TX_SINGLE);
-            ESP_LOGI(TAG, "SYNCWORD ERROR %x", irqstatus & IRQ_SYNCWORD_ERROR);
-            continue;
-         }
-         if (irqstatus & IRQ_RX_DONE)
-         {
-            ESP_LOGI(TAG, "DONE %x", irqstatus & IRQ_RX_DONE);
-            if (unbinded)
-            {
-
-#ifdef DEBUG
-               xTaskNotifyGive(frameproc_h);
-#else
-               nvs_handle_t nvs_handle;
-               nvs_open(RC_TABLE, NVS_READONLY, &nvs_handle);
-               ESP_LOGI(TAG, "NVS Opened!");
-               nvs_set_blob(nvs_handle, BIND_STATUS, &rc_frame, FRAME_SIZE);
-               ESP_LOGI(TAG, "Bind Status saved!");
-               nvs_commit(nvs_handle);
-               nvs_close(nvs_handle);
-               procces_bind_frame();
-               radio_setparam();
-#endif
-               SX1280SetRx(RX_TX_SINGLE);
-               continue;
-            }
-            else
-               break;
-         }
+         else
+            break;
       }
-
       if (gpio_get_level(GPIO_NUM_0) == 0)
          bind_count++;
       else
          bind_count = 0;
 
-      if (bind_count > 300)
+      if (bind_count > 30)
       {
          bind_count = 0;
          setbind();
       }
    }
 
-   ESP_LOGI(TAG, "Receive first frame!");
+   hw_timer_alarm_us(time_interval + 200, 0);
+   islinked = true;
+   frame_ok = true;
+   frame_count++;
+   xTaskNotifyGive(frameproc_h);
+   ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // wait for next timeslot
+   SX1280SetRx(RX_TX_SINGLE);
 
    while (1)
    {
-      if (sx1280_notify == pdFALSE)
+
+      hw_timer_alarm_us(frame_interval, 0);
+      frame_count++;
+      sx1280_notify = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // wait isr
+
+      switch (sx1280_notify)
       {
-         frame_ok = 0;
-         islinked = 0;
-         fhss_ch = 0;
-         SX1280SetRfFrequency(fhss_ch);
-         SX1280SetRx(RX_TX_SINGLE);
+      case 1: // rxdone
+         xTaskNotifyGive(frameproc_h);
+         ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // wait for timeslot
+         break;
+      case 2: // rxtimeout
+         SX1280SetFs();
+         frame_ok = false;
+         break;
       }
+      hw_timer_alarm_us(time_interval, 0);
+
+      if (islinked)
+      {
+         fhss_ch = (fhss_ch * 2 + 5) % 101;
+         SX1280SetRfFrequency(fhss_ch);
+      }
+
+      if (frame_ok)
+         frame_err_count = 0;
       else
       {
-         uint16_t irqstatus = SX1280GetIrqStatus();
-         SX1280ClearIrqStatus(IRQ_RADIO_ALL);
-
-         switch (irqstatus)
-         {
-         case IRQ_RX_DONE:
-            xTaskNotifyGive(frameproc_h);
-            err_count = 0;
-            frame_ok = 1;
-            islinked = 1;
-            break;
-         case IRQ_TX_DONE:
-            break;
-         case IRQ_CRC_ERROR:
-         case IRQ_RX_TX_TIMEOUT:
-         case IRQ_SYNCWORD_ERROR:
-            err_count++;
-            frame_ok = 0;
-            if (err_count > err_count_max)
-               islinked = 0;
-            break;
-         default:
-            break;
-         }
-         xTaskNotifyGive(frameproc_h);
-         for (uint8_t i = 1; i <= fhss_step; i++)
-            fhss_ch = (fhss_ch * 2 + 5) % 101;
-         SX1280SetRfFrequency(fhss_ch);
-         hw_timer_alarm_us(time_interval, false);
-         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-         if (telemetry)
-            SX1280SetTx(frame_interval);
-         else
-            SX1280SetRx(frame_interval);
+         frame_err_count++;
+         err_count++;
       }
-      sx1280_notify = ulTaskNotifyTake(pdTRUE, 300);
-      WDT_FEED();
+
+      if (frame_err_count >= err_count_max)
+         islinked = false;
+
+      if (frame_count == 200)
+      {
+         ESP_LOGI(TAG, "Error Count %d", err_count);
+         frame_count = 0;
+         err_count = 0;
+      }
+
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // wait for next timeslot
+      SX1280SetRx(RX_TX_SINGLE);
    }
    vTaskDelete(NULL);
 }
@@ -368,16 +361,17 @@ static void radio_init()
 
    nvs_handle_t nvs_handle;
    ESP_ERROR_CHECK(nvs_flash_init());
-   if (nvs_open(RC_TABLE, NVS_READONLY, &nvs_handle) == ESP_OK)
-   {
-      ESP_LOGI(TAG, "NVS Opened!");
-      size_t nvs_bind_size = FRAME_SIZE;
-      if (nvs_get_blob(nvs_handle, BIND_STATUS, &rc_frame, &nvs_bind_size) == ESP_OK)
+   /*   if (nvs_open(RC_TABLE, NVS_READONLY, &nvs_handle) == ESP_OK)
       {
-         procces_bind_frame();
+         ESP_LOGI(TAG, "NVS Opened!");
+         size_t nvs_bind_size = FRAME_SIZE;
+         if (nvs_get_blob(nvs_handle, BIND_STATUS, rc_frame.rcdata, &nvs_bind_size) == ESP_OK)
+         {
+            procces_bind_frame();
+         }
       }
-   }
-   nvs_close(nvs_handle);
+      nvs_close(nvs_handle);
+      */
    radio_setparam();
 
    ESP_LOGI(TAG, "radio init!");
@@ -422,7 +416,11 @@ void app_main()
 
    xTaskCreate(rxloop, "mainloop", 1024, NULL, 10, &rxloop_h);
 
-   xTaskCreate(frameproc, "frameloop", 1024, NULL, 9, &frameproc_h);
+   xTaskCreate(frameproc, "frameproc", 1024, NULL, 9, &frameproc_h);
 
    xTaskCreate(led_loop, "ledloop", configMINIMAL_STACK_SIZE / 2, NULL, 6, NULL);
+}
+
+void test()
+{
 }

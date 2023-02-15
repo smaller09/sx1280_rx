@@ -90,12 +90,16 @@ typedef union
    uint8_t ch9_12[5];
 } last5ch_t;
 
-typedef struct
+typedef union
 {
-   frameheader_t frameheader;
-   uint8_t ch1_8[10]; // channel 1-8
-   last5ch_t last5ch;
-} frame_struct_t;
+   struct
+   {
+      frameheader_t frameheader;
+      uint8_t ch1_8[10]; // channel 1-8
+      last5ch_t last5ch;
+   };
+   uint8_t rcdata[16];
+}frame_struct_t;
 
 #define BIND_CHANNEL 96
 #define FRAME_SIZE 16 // sizeof(bind_status)
