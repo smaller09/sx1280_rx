@@ -55,28 +55,20 @@ typedef union
    uint8_t val;
 } ch9_12switch_t;
 
-typedef union
+typedef struct
 {
-   struct
-   {
-      uint8_t failsafe : 2; // failsafe mode
-      uint8_t rx_num : 6;
-      uint8_t sbus : 1;
-      uint8_t sbus_inv : 1;
-      uint8_t frame_mode : 2;
-      uint8_t reserved : 4;
-   };
-   uint16_t val;
+   uint8_t failsafe : 2; // failsafe mode
+   uint8_t rx_num : 6;
+   uint8_t sbus : 1;
+   uint8_t sbus_inv : 1;
+   uint8_t frame_mode : 2;
+   uint8_t reserved : 4;
 } bind_info_t;
 
-typedef union
+typedef struct
 {
-   struct
-   {
-      uint8_t sync1;
-      uint8_t sync2;
-   };
-   uint16_t val;
+   uint8_t sync_h;
+   uint8_t sync_l;
 } syncword_t;
 
 typedef union
@@ -96,10 +88,10 @@ typedef union
    {
       frameheader_t frameheader;
       uint8_t ch1_8[10]; // channel 1-8
-      last5ch_t last5ch;
+      last5ch_t last4ch;
    };
    uint8_t rcdata[16];
-}frame_struct_t;
+} frame_struct_t;
 
 #define BIND_CHANNEL 96
 #define FRAME_SIZE 16 // sizeof(bind_status)

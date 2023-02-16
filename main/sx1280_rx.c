@@ -23,7 +23,7 @@
 sx1280_buff_t DRAM_ATTR WORD_ALIGNED_ATTR spi_buf;
 
 static const char *RC_TABLE = "RC_TABLE";
-// struct BIND_STATUS
+
 static const char *BIND_STATUS = "BIND_STATUS";
 
 static const char *TAG = "sx1280_rx";
@@ -48,22 +48,21 @@ static TaskHandle_t rxloop_h = NULL;
 
 static TaskHandle_t frameproc_h;
 
-frame_struct_t volatile DRAM_ATTR rc_frame;
+frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR rc_frame;
 
-frame_struct_t volatile DRAM_ATTR failsafe_frame;
+frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR failsafe_frame;
 
 static uint32_t time_interval;
 
 static uint32_t frame_interval;
 
-static volatile uint8_t frame_err_count;
 #define DEBUG
 // #undef DEBUG
 
 void dio_isr_handler(void *arg)
 {
    BaseType_t content_switch = pdFALSE;
-   vTaskNotifyGiveFromISR(rxloop_h, &content_switch);
+   xTaskNotifyFromISR(rxloop_h, 1, eSetValueWithOverwrite, &content_switch);
    if (content_switch)
       portYIELD_FROM_ISR();
 }
@@ -71,10 +70,7 @@ void dio_isr_handler(void *arg)
 void timercb()
 {
    BaseType_t content_switch = pdFALSE;
-   /*
-   hw_timer_disarm();
-   hw_timer_set_load_data(0);*/
-   vTaskNotifyGiveFromISR(rxloop_h, &content_switch);
+   xTaskNotifyFromISR(rxloop_h, 2, eSetValueWithOverwrite, &content_switch);
    if (content_switch)
       portYIELD_FROM_ISR();
 }
@@ -99,8 +95,6 @@ void radio_setparam()
    else
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF8; // LRmode
 
-   SX1280SetStandby(STDBY_XOSC);
-
    SX1280SetPacketType(modulationParams.PacketType);
 
    SX1280SetRfFrequency(fhss_ch);
@@ -114,7 +108,7 @@ void radio_setparam()
    SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
 
    SX1280SetTxParams(18, RADIO_RAMP_02_US);
-   SX1280SetDioIrqParams((IRQ_TX_DONE | IRQ_RX_DONE | IRQ_CRC_ERROR | IRQ_SYNCWORD_ERROR), IRQ_RADIO_ALL, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
+   SX1280SetDioIrqParams(IRQ_RADIO_ALL, (IRQ_TX_DONE | IRQ_RX_DONE | IRQ_CRC_ERROR | IRQ_SYNCWORD_ERROR), IRQ_RADIO_NONE, IRQ_RADIO_NONE);
 
    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
 
@@ -131,12 +125,17 @@ void radio_setparam()
       frame_interval = 17300;
       break;
    }
+   
+   ESP_LOGI(TAG, "unbinded: %d", unbinded);
+   ESP_LOGI(TAG, "frame_mode: %d", frame_mode);
+   ESP_LOGI(TAG, "fhss_ch: %d", fhss_ch);
+   ESP_LOGI(TAG, "syncword %x %x", rc_frame.last4ch.syncword.sync_h, rc_frame.last4ch.syncword.sync_l);
 }
 
 static void setbind()
 {
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(0x1424); // reset to default syncword;
+   SX1280SetLoraSyncWord(0x14, 0x24); // reset to default syncword;
    unbinded = true;
    ESP_LOGI(TAG, "Enter bind mode");
    fhss_ch = BIND_CHANNEL;
@@ -148,12 +147,12 @@ static void procces_bind_frame()
 {
    unbinded = false;
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(rc_frame.last5ch.syncword.val);
-   fhss_ch = rc_frame.last5ch.bind_info.rx_num;
-   frame_mode = rc_frame.last5ch.bind_info.frame_mode; // frame mode in the telemetry bit.
+  // SX1280SetLoraSyncWord(rc_frame.last4ch.syncword.sync_h, rc_frame.last4ch.syncword.sync_l);
+   fhss_ch = rc_frame.last4ch.bind_info.rx_num;
+   frame_mode = rc_frame.last4ch.bind_info.frame_mode; // frame mode in the telemetry bit.
    frame_mode &= 1;
 
-   if (rc_frame.last5ch.bind_info.failsafe == 3)
+   if (rc_frame.last4ch.bind_info.failsafe == 3)
    {
 
       failsafe_frame.frameheader.val = 0x00;
@@ -170,33 +169,31 @@ static void procces_bind_frame()
       failsafe_frame.ch1_8[8] = 0xFD; //{0x7F,0xDF,0xF7,0xFD,0xFF}
       failsafe_frame.ch1_8[9] = 0xFF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
 
-      failsafe_frame.last5ch.ch9_12[0] = 0x7F; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last5ch.ch9_12[1] = 0xDF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last5ch.ch9_12[2] = 0xF7; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last5ch.ch9_12[3] = 0xFD; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last5ch.ch9_12[4] = 0xFF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.last4ch.ch9_12[0] = 0x7F; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.last4ch.ch9_12[1] = 0xDF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.last4ch.ch9_12[2] = 0xF7; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.last4ch.ch9_12[3] = 0xFD; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.last4ch.ch9_12[4] = 0xFF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
    }
-   if (rc_frame.last5ch.bind_info.failsafe == 2)
+   if (rc_frame.last4ch.bind_info.failsafe == 2)
    {
-      memcpy(&failsafe_frame, &rc_frame, 11); // frame
+      memcpy(failsafe_frame.rcdata, rc_frame.rcdata, 11); // frame
       uint16_t tmp;
-      tmp = failsafe_frame.last5ch.ch9_12switch.ch9 * 511;
-      failsafe_frame.last5ch.ch9_12[0] = (uint8_t)((tmp >> 2) & 0xff);
-      failsafe_frame.last5ch.ch9_12[1] = ((uint8_t)(tmp & 0x03)) << 6;
-      tmp = failsafe_frame.last5ch.ch9_12switch.ch10 * 511;
-      failsafe_frame.last5ch.ch9_12[1] |= (uint8_t)((tmp >> 4) & 0x3f);
-      failsafe_frame.last5ch.ch9_12[2] = ((uint8_t)(tmp & 0x0f)) << 4;
-      tmp = failsafe_frame.last5ch.ch9_12switch.ch11 * 511;
-      failsafe_frame.last5ch.ch9_12[2] |= (uint8_t)((tmp >> 6) & 0x0f);
-      failsafe_frame.last5ch.ch9_12[3] = ((uint8_t)(tmp & 0x3f)) << 2;
-      tmp = failsafe_frame.last5ch.ch9_12switch.ch11 * 511;
-      failsafe_frame.last5ch.ch9_12[3] |= (uint8_t)((tmp >> 8) & 0x03);
-      failsafe_frame.last5ch.ch9_12[4] = (uint8_t)(tmp & 0xff);
+      tmp = failsafe_frame.last4ch.ch9_12switch.ch9 * 511;
+      failsafe_frame.last4ch.ch9_12[0] = (uint8_t)((tmp >> 2) & 0xff);
+      failsafe_frame.last4ch.ch9_12[1] = ((uint8_t)(tmp & 0x03)) << 6;
+      tmp = failsafe_frame.last4ch.ch9_12switch.ch10 * 511;
+      failsafe_frame.last4ch.ch9_12[1] |= (uint8_t)((tmp >> 4) & 0x3f);
+      failsafe_frame.last4ch.ch9_12[2] = ((uint8_t)(tmp & 0x0f)) << 4;
+      tmp = failsafe_frame.last4ch.ch9_12switch.ch11 * 511;
+      failsafe_frame.last4ch.ch9_12[2] |= (uint8_t)((tmp >> 6) & 0x0f);
+      failsafe_frame.last4ch.ch9_12[3] = ((uint8_t)(tmp & 0x3f)) << 2;
+      tmp = failsafe_frame.last4ch.ch9_12switch.ch11 * 511;
+      failsafe_frame.last4ch.ch9_12[3] |= (uint8_t)((tmp >> 8) & 0x03);
+      failsafe_frame.last4ch.ch9_12[4] = (uint8_t)(tmp & 0xff);
    }
    ESP_LOGI(TAG, "bind status read!");
-   ESP_LOGI(TAG, "frame_mode: %d", frame_mode);
-   ESP_LOGI(TAG, "fhss_ch: %d", fhss_ch);
-   ESP_LOGI(TAG, "syncword %x", rc_frame.last5ch.syncword.val);
+
    radio_setparam();
 }
 
@@ -213,8 +210,8 @@ static void frameproc()
          frame_ok = false;
          continue;
       }
-      SX1280GetPayload(16);
-      memcpy(rc_frame.rcdata, &spi_buf.recv_buf_8[0], FRAME_SIZE); // frame size
+      SX1280GetPayload(FRAME_SIZE);
+      memcpy(&rc_frame.rcdata[0], &spi_buf.recv_buf_8[0], FRAME_SIZE); // frame size
 
       islinked = true;
       frame_ok = true;
@@ -232,24 +229,30 @@ static void rxloop(void *arg)
    uint16_t bind_count = 0;
    uint8_t err_count = 0;
    uint8_t frame_count = 0;
-   ESP_LOGI(TAG, "freq: %d", fhss_ch);
-   while (1)
+   uint8_t frame_err_count = 0;
 
+   SX1280SetRx(RX_TX_SINGLE);
+   while (1)
    {
-      SX1280SetRx(RX_TX_SINGLE);
+
       sx1280_notify = ulTaskNotifyTake(pdTRUE, 10);
       if (sx1280_notify)
       {
+         uint16_t irqstatus = SX1280GetIrqStatus();
+         ESP_LOGI(TAG, "IRQ Status %x", irqstatus);
+         SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+         if (irqstatus & IRQERR)
+         {
+            SX1280SetRx(RX_TX_SINGLE);
+            ESP_LOGI(TAG, "freq %d", fhss_ch);
+            continue;
+         }
 
          if (unbinded)
          {
-            uint16_t irqstatus = SX1280GetIrqStatus();
-            ESP_LOGI(TAG, "IRQ Status %x", irqstatus);
-            SX1280ClearIrqStatus(IRQ_RADIO_ALL);
-            if (irqstatus & IRQERR)
-               continue;
+
             SX1280GetPayload(FRAME_SIZE);
-            memcpy(rc_frame.rcdata, &spi_buf.recv_buf_8[0], FRAME_SIZE); // frame size
+            memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame size
             nvs_handle_t nvs_handle;
             nvs_open(RC_TABLE, NVS_READWRITE, &nvs_handle);
             ESP_LOGI(TAG, "NVS Opened!");
@@ -258,7 +261,7 @@ static void rxloop(void *arg)
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             procces_bind_frame();
-            radio_setparam();
+            SX1280SetRx(RX_TX_SINGLE);
             continue;
          }
          else
@@ -369,22 +372,18 @@ void led_loop()
 static void radio_init()
 {
    // GPIO2:Reset, GPIO4:DIO1, GPIO5:BUSY, GPIO0: SW, GPIO16:LED
-
    nvs_handle_t nvs_handle;
    ESP_ERROR_CHECK(nvs_flash_init());
-   /*   if (nvs_open(RC_TABLE, NVS_READONLY, &nvs_handle) == ESP_OK)
+   if (nvs_open(RC_TABLE, NVS_READONLY, &nvs_handle) == ESP_OK)
+   {
+      ESP_LOGI(TAG, "NVS Opened!");
+      size_t nvs_bind_size = FRAME_SIZE;
+      if (nvs_get_blob(nvs_handle, BIND_STATUS, rc_frame.rcdata, &nvs_bind_size) == ESP_OK)
       {
-         ESP_LOGI(TAG, "NVS Opened!");
-         size_t nvs_bind_size = FRAME_SIZE;
-         if (nvs_get_blob(nvs_handle, BIND_STATUS, rc_frame.rcdata, &nvs_bind_size) == ESP_OK)
-         {
-            procces_bind_frame();
-         }
+         procces_bind_frame();
       }
-      nvs_close(nvs_handle);
-      */
-   radio_setparam();
-
+   }
+   nvs_close(nvs_handle);
    ESP_LOGI(TAG, "radio init!");
 }
 
@@ -434,4 +433,5 @@ void app_main()
 
 void test()
 {
+   uint a = sizeof(rc_frame);
 }

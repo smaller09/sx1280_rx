@@ -1347,7 +1347,7 @@ int8_t SX1280GetRssiInst(void);
  */
 void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask);
 
-void SX1280SetLoraSyncWord(uint16_t Syncword);
+void SX1280SetLoraSyncWord(uint8_t sync_h, uint8_t sync_l);
 
 void SX1280SetLoraMagicNum(uint8_t MagicNum);
 

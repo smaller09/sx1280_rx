@@ -24,8 +24,6 @@
 
 extern sx1280_buff_t spi_buf;
 
-
-
 /*      frequency = 2400000000 + 1000000 * i;
         freq = (uint32_t)((double)frequency / (double)FREQ_STEP);
         freq_h = (uint8_t)((freq >> 16) & 0xFF);
@@ -155,37 +153,34 @@ void SX1280GetRxBufferStatus(uint8_t *payloadLength, uint8_t *rxStartBuffer)
     *rxStartBuffer = spi_buf.send_buf_8[2];
 }
 
-void SX1280GetPacketStatus( PacketStatus_t *pktStatus )
+void SX1280GetPacketStatus(PacketStatus_t *pktStatus)
 {
-    hspi_trans( RADIO_GET_PACKETSTATUS, 0, 48 );
+    hspi_trans(RADIO_GET_PACKETSTATUS, 0, 48);
 
     pktStatus->packetType = PACKET_TYPE_LORA;
 
+    pktStatus->Params.LoRa.RssiPkt = -spi_buf.recv_buf_8[1] / 2;
+    (spi_buf.recv_buf_8[2] < 128) ? (pktStatus->Params.LoRa.SnrPkt = spi_buf.recv_buf_8[2] / 4) : (pktStatus->Params.LoRa.SnrPkt = ((spi_buf.recv_buf_8[2] - 256) / 4));
 
-            pktStatus->Params.LoRa.RssiPkt = -spi_buf.recv_buf_8[1] / 2;
-            ( spi_buf.recv_buf_8[2] < 128 ) ? ( pktStatus->Params.LoRa.SnrPkt = spi_buf.recv_buf_8[2] / 4 ) : ( pktStatus->Params.LoRa.SnrPkt = ( ( spi_buf.recv_buf_8[2] - 256 ) /4 ) );
+    pktStatus->Params.LoRa.ErrorStatus.SyncError = (spi_buf.recv_buf_8[3] >> 6) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.LengthError = (spi_buf.recv_buf_8[3] >> 5) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.CrcError = (spi_buf.recv_buf_8[3] >> 4) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.AbortError = (spi_buf.recv_buf_8[3] >> 3) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.HeaderReceived = (spi_buf.recv_buf_8[3] >> 2) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.PacketReceived = (spi_buf.recv_buf_8[3] >> 1) & 0x01;
+    pktStatus->Params.LoRa.ErrorStatus.PacketControlerBusy = spi_buf.recv_buf_8[3] & 0x01;
 
-            pktStatus->Params.LoRa.ErrorStatus.SyncError = ( spi_buf.recv_buf_8[3] >> 6 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.LengthError = ( spi_buf.recv_buf_8[3] >> 5 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.CrcError = ( spi_buf.recv_buf_8[3] >> 4 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.AbortError = ( spi_buf.recv_buf_8[3] >> 3 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.HeaderReceived = ( spi_buf.recv_buf_8[3] >> 2 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.PacketReceived = ( spi_buf.recv_buf_8[3] >> 1 ) & 0x01;
-            pktStatus->Params.LoRa.ErrorStatus.PacketControlerBusy = spi_buf.recv_buf_8[3] & 0x01;
+    pktStatus->Params.LoRa.TxRxStatus.RxNoAck = (spi_buf.recv_buf_8[4] >> 5) & 0x01;
+    pktStatus->Params.LoRa.TxRxStatus.PacketSent = spi_buf.recv_buf_8[4] & 0x01;
 
-            pktStatus->Params.LoRa.TxRxStatus.RxNoAck = ( spi_buf.recv_buf_8[4] >> 5 ) & 0x01;
-            pktStatus->Params.LoRa.TxRxStatus.PacketSent = spi_buf.recv_buf_8[4] & 0x01;
-
-            pktStatus->Params.LoRa.SyncAddrStatus = spi_buf.recv_buf_8[5] & 0x07;
-
-    }
-
+    pktStatus->Params.LoRa.SyncAddrStatus = spi_buf.recv_buf_8[5] & 0x07;
+}
 
 void SX1280GetPayload(uint8_t size)
 {
     spi_buf.send_buf_8[0] = rxBaseAddress;
     spi_buf.send_buf_8[1] = 0;
-    hspi_trans(RADIO_READ_BUFFER, 16, (size) * 8);
+    hspi_trans(RADIO_READ_BUFFER, 16, (size)*8);
 }
 // hspi_trans(uint8_t cmd_data, uint8_t dout_bits, uint8_t din_bits);
 void SX1280SetRx(TickTime_t timeout)
@@ -305,8 +300,6 @@ void SX1280SetRfFrequency(uint8_t channel)
     hspi_trans(RADIO_SET_RFFREQUENCY, 24, 0);
 }
 
-
-
 void SX1280Reset(void)
 {
     gpio_set_level(GPIO_NUM_2, 0);
@@ -373,13 +366,13 @@ static void hspi_init()
     trans.mosi = (spi_buf.send_buf_32);
 }
 
-void SX1280SetLoraSyncWord(uint16_t Syncword)
+void SX1280SetLoraSyncWord(uint8_t sync_h, uint8_t sync_l)
 {
     spi_buf.send_buf_8[0] = (uint8_t)(REG_LORASYNCWORD >> 8);
     spi_buf.send_buf_8[1] = (uint8_t)(REG_LORASYNCWORD & 0xff);
-    spi_buf.send_buf_8[2] = (uint8_t)(Syncword >> 8);
-    spi_buf.send_buf_8[3] = (uint8_t)(Syncword & 0xff);
-//    spi_buf.send_buf_16[1]=Syncword;
+    spi_buf.send_buf_8[2] = sync_h;
+    spi_buf.send_buf_8[3] = sync_l;
+    //    spi_buf.send_buf_16[1]=Syncword;
     hspi_trans(RADIO_WRITE_REGISTER, 32, 0);
 }
 
