@@ -49,9 +49,13 @@ frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR rc_frame;
 
 frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR failsafe_frame;
 
+frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR term_frame;
+
 static uint16_t time_interval;
 
 static uint16_t frame_interval;
+
+static volatile uint32_t Tcount;
 
 #define DEBUG
 // #undef DEBUG
@@ -59,7 +63,7 @@ static uint16_t frame_interval;
 void dio_isr_handler(void *arg)
 {
    BaseType_t content_switch = pdFALSE;
-   //Tcount = frc1.load.data - frc1.count.data;
+   // Tcount = frc1.count.data;
    xTaskNotifyFromISR(rxloop_h, 1, eSetValueWithOverwrite, &content_switch);
    if (content_switch)
       portYIELD_FROM_ISR();
@@ -114,12 +118,12 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 380;
+      time_interval = 400;
       frame_interval = 10000;
       break;
    case 1:
       err_count_max = 100;
-      time_interval = 2780;
+      time_interval = 2800;
       frame_interval = 20000;
       break;
    }
@@ -267,7 +271,13 @@ static void rxloop(void *arg)
 
    while (1)
    {
+
       hw_timer_alarm_us(frame_interval, 0);
+      if (rc_frame.frameheader.telemetry)
+      {
+         memcpy(&spi_buf.send_buf_8[1], term_frame.rcdata, FRAME_SIZE); // frame
+         SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
+      }
 
       frame_count++;
       if (frame_count >= 200)
@@ -281,7 +291,7 @@ static void rxloop(void *arg)
       sx1280_notify = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
       switch (sx1280_notify)
       {
-      case 1: // rxdone
+      case 1: // rxrxdone
          irqstatus = SX1280GetIrqStatus() & IRQERR;
          SX1280ClearIrqStatus(IRQ_RADIO_ALL);
          if (irqstatus)
@@ -293,26 +303,32 @@ static void rxloop(void *arg)
          }
          else
          {
-            SX1280GetPayload(FRAME_SIZE);
-            memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
-            frame_ok = true;
-            frame_err_count = 0;
-            islinked = true;
-            hw_timer_alarm_us(time_interval, 0);
-           // ESP_LOGI(TAG, "Tcount :%d", Tcount);
-         }
+            if (rc_frame.frameheader.telemetry == 0)
+            {
+               SX1280GetPayload(FRAME_SIZE);
+               memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
+               frame_ok = true;
+               frame_err_count = 0;
+               islinked = true;
+               hw_timer_alarm_us(time_interval, 0);
+            }
+            else
+               rc_frame.frameheader.telemetry = 0;
 
+            
+            // ESP_LOGI(TAG, "Tcount :%d", Tcount);
+         }
          fhss_ch = (fhss_ch * 2 + 5) % 101;
          SX1280SetRfFrequency(fhss_ch);
-
          ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-         SX1280SetRx(RX_TX_SINGLE);
+         if (rc_frame.frameheader.telemetry == 0)
+            SX1280SetRx(RX_TX_SINGLE);
          break;
       case 2: // rxtimeout
          frame_ok = false;
          err_count++;
          frame_err_count++;
-
+         ESP_LOGI(TAG, "Timeout :%d", fhss_ch);
          if (islinked)
          {
             SX1280SetFs();
@@ -372,6 +388,8 @@ static void radio_init()
       radio_setparam();
    nvs_close(nvs_handle);
    ESP_LOGI(TAG, "radio init!");
+   for (uint8_t i = 0; i < FRAME_SIZE; i++)
+      term_frame.rcdata[i] = i;
 }
 
 void app_main()
