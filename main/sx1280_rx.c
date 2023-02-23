@@ -118,7 +118,7 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 410;
+      time_interval = 380;
       frame_interval = 10000;
       break;
    case 1:
@@ -283,7 +283,7 @@ static void rxloop(void *arg)
          memcpy(&spi_buf.send_buf_8[1], term_frame.rcdata, FRAME_SIZE); // frame
          SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
          rc_frame.frameheader.telemetry = 0;
-         //ESP_LOGI(TAG, "telemetry");
+         // ESP_LOGI(TAG, "telemetry");
       }
 
       frame_count++;
@@ -328,7 +328,9 @@ static void rxloop(void *arg)
 
          SX1280SetRfFrequency(fhss_ch);
          SX1280SetRx(RX_TX_SINGLE);
-         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+         if (islinked)
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
          break;
       case 2: // rxtimeout
          frame_ok = false;
