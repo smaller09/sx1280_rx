@@ -120,12 +120,12 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 360;
+      time_interval = 330;
       frame_interval = 10000;
       break;
    case 1:
       err_count_max = 100;
-      time_interval = 2760;
+      time_interval = 2750;
       frame_interval = 20000;
       break;
    }
@@ -233,15 +233,22 @@ static void rxloop(void *arg)
          else
          {
             hw_timer_alarm_us(time_interval, 0);
+            frame_ok = true;
+            frame_err_count = 0;
+            lq_count++;
+            islinked = true;
 
             SX1280GetPayload(FRAME_SIZE);
-            memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE);
+            memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
 
-            islinked = true;
-            frame_ok = true;
+            xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
+            freqerr = SX1280GetFrequencyError();
+            SX1280GetPacketStatus(&pktstatus);
+
             fhss_ch = (fhss_ch * 2 + 5) % 101;
-            ESP_LOGI(TAG, "first frame");
             SX1280SetRfFrequency(fhss_ch);
+
+            ESP_LOGI(TAG, "first frame");
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             SX1280SetRx(RX_TX_SINGLE);
 
@@ -311,7 +318,7 @@ static void rxloop(void *arg)
                SX1280GetPayload(FRAME_SIZE);
                memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
                freqerr = SX1280GetFrequencyError();
-               // xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
+               xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
                SX1280GetPacketStatus(&pktstatus);
             }
          }
@@ -334,6 +341,23 @@ static void rxloop(void *arg)
          }
          break;
       }
+      xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
+   }
+   vTaskDelete(NULL);
+}
+
+void crsfloop()
+{
+   while (1)
+   {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      if (islinked)
+      {
+         //uart sent rc frame
+         vTaskDelay(5);
+         //uart sent link static
+      }
+      vTaskDelay(5);
    }
    vTaskDelete(NULL);
 }
@@ -381,15 +405,6 @@ static void radio_init()
       term_frame.rcdata[i] = i;
 }
 
-void crsfloop()
-{
-   while (1)
-   {
-      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-      vTaskDelay(5);
-   }
-}
-
 void app_main()
 {
    esp_set_cpu_freq(ESP_CPU_FREQ_160M);
@@ -416,7 +431,7 @@ void app_main()
 
    radio_init();
 
-   // UART0_Init();
+   UART0_Init();
 
    sx1280_gpio.pin_bit_mask = (GPIO_Pin_4);
    sx1280_gpio.mode = GPIO_MODE_INPUT;
