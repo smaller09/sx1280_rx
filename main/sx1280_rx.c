@@ -37,13 +37,13 @@ static volatile bool unbinded = true;
 
 static volatile bool frame_ok = false;
 
-static volatile bool telemetry;
-
 static volatile uint8_t frame_mode = 0;
 
 static uint8_t err_count_max;
 
 static TaskHandle_t rxloop_h = NULL;
+
+static TaskHandle_t crsfloop_h = NULL;
 
 frame_struct_t WORD_ALIGNED_ATTR DRAM_ATTR rc_frame;
 
@@ -55,7 +55,9 @@ static uint16_t time_interval;
 
 static uint16_t frame_interval;
 
-static volatile uint32_t Tcount;
+static volatile int32_t freqerr;
+
+static PacketStatus_t pktstatus;
 
 #define DEBUG
 // #undef DEBUG
@@ -118,12 +120,12 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 380;
+      time_interval = 360;
       frame_interval = 10000;
       break;
    case 1:
       err_count_max = 100;
-      time_interval = 2850;
+      time_interval = 2760;
       frame_interval = 20000;
       break;
    }
@@ -131,68 +133,55 @@ void radio_setparam()
    ESP_LOGI(TAG, "unbinded: %d", unbinded);
    ESP_LOGI(TAG, "frame_mode: %d", frame_mode);
    ESP_LOGI(TAG, "fhss_ch: %d", fhss_ch);
-   ESP_LOGI(TAG, "syncword %x %x", rc_frame.last4ch.syncword.sync_h, rc_frame.last4ch.syncword.sync_l);
+   ESP_LOGI(TAG, "syncword %x", rc_frame.syncword);
 }
 
 static void setbind()
 {
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(0x14, 0x24); // reset to default syncword;
+   SX1280SetLoraSyncWord(0x2414); // reset to default syncword;
+   rc_frame.syncword = 0x2414;
    unbinded = true;
    ESP_LOGI(TAG, "Enter bind mode");
    fhss_ch = BIND_CHANNEL;
    vTaskDelay(1);
    radio_setparam();
+   SX1280SetRx(RX_TX_SINGLE);
 }
 
 static void procces_bind_frame()
 {
    unbinded = false;
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(rc_frame.last4ch.syncword.sync_h, rc_frame.last4ch.syncword.sync_l);
-   fhss_ch = rc_frame.last4ch.bind_info.rx_num;
-   frame_mode = rc_frame.last4ch.bind_info.frame_mode; // frame mode in the telemetry bit.
+   SX1280SetLoraSyncWord(rc_frame.syncword);
+   fhss_ch = rc_frame.bind_info.rx_num;
+   frame_mode = rc_frame.bind_info.frame_mode; // frame mode in the telemetry bit.
    frame_mode &= 1;
 
-   if (rc_frame.last4ch.bind_info.failsafe == 3)
+   if (rc_frame.bind_info.failsafe == 3) // receiver
    {
 
       failsafe_frame.frameheader.val = 0x00;
-
-      failsafe_frame.ch1_8[0] = 0x7F; ////7F DF F0 01 FF
-      failsafe_frame.ch1_8[1] = 0xDF;
-      failsafe_frame.ch1_8[2] = 0xF0; //
-      failsafe_frame.ch1_8[3] = 0x00; // channel3 (thr) set to 0
-      failsafe_frame.ch1_8[4] = 0xFF;
-
-      failsafe_frame.ch1_8[5] = 0x7F; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.ch1_8[6] = 0xDF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.ch1_8[7] = 0xF7; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.ch1_8[8] = 0xFD; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.ch1_8[9] = 0xFF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-
-      failsafe_frame.last4ch.ch9_12[0] = 0x7F; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last4ch.ch9_12[1] = 0xDF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last4ch.ch9_12[2] = 0xF7; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last4ch.ch9_12[3] = 0xFD; //{0x7F,0xDF,0xF7,0xFD,0xFF}
-      failsafe_frame.last4ch.ch9_12[4] = 0xFF; //{0x7F,0xDF,0xF7,0xFD,0xFF}
+      failsafe_frame.chan01 = 511;
+      failsafe_frame.chan02 = 511;
+      failsafe_frame.chan03 = 0;
+      failsafe_frame.chan04 = 511;
+      failsafe_frame.chan05 = 511;
+      failsafe_frame.chan06 = 511;
+      failsafe_frame.chan07 = 511;
+      failsafe_frame.chan08 = 511;
+      failsafe_frame.chan09 = 511;
+      failsafe_frame.chan10 = 511;
+      failsafe_frame.chan11 = 511;
+      failsafe_frame.chan12 = 511;
    }
-   if (rc_frame.last4ch.bind_info.failsafe == 2)
+   if (rc_frame.bind_info.failsafe == 2)
    {
       memcpy(failsafe_frame.rcdata, rc_frame.rcdata, 11); // frame
-      uint16_t tmp;
-      tmp = failsafe_frame.last4ch.ch9_12switch.ch9 * 511;
-      failsafe_frame.last4ch.ch9_12[0] = (uint8_t)((tmp >> 2) & 0xff);
-      failsafe_frame.last4ch.ch9_12[1] = ((uint8_t)(tmp & 0x03)) << 6;
-      tmp = failsafe_frame.last4ch.ch9_12switch.ch10 * 511;
-      failsafe_frame.last4ch.ch9_12[1] |= (uint8_t)((tmp >> 4) & 0x3f);
-      failsafe_frame.last4ch.ch9_12[2] = ((uint8_t)(tmp & 0x0f)) << 4;
-      tmp = failsafe_frame.last4ch.ch9_12switch.ch11 * 511;
-      failsafe_frame.last4ch.ch9_12[2] |= (uint8_t)((tmp >> 6) & 0x0f);
-      failsafe_frame.last4ch.ch9_12[3] = ((uint8_t)(tmp & 0x3f)) << 2;
-      tmp = failsafe_frame.last4ch.ch9_12switch.ch11 * 511;
-      failsafe_frame.last4ch.ch9_12[3] |= (uint8_t)((tmp >> 8) & 0x03);
-      failsafe_frame.last4ch.ch9_12[4] = (uint8_t)(tmp & 0xff);
+      failsafe_frame.chan09 = rc_frame.ch9_12switch.ch9 * 511;
+      failsafe_frame.chan10 = rc_frame.ch9_12switch.ch10 * 511;
+      failsafe_frame.chan11 = rc_frame.ch9_12switch.ch11 * 511;
+      failsafe_frame.chan12 = rc_frame.ch9_12switch.ch12 * 511;
    }
    ESP_LOGI(TAG, "bind status read!");
 
@@ -203,11 +192,10 @@ static void rxloop(void *arg)
 {
    uint32_t sx1280_notify;
    uint16_t bind_count = 0;
-   uint8_t err_count = 0;
+   uint8_t lq_count = 0;
    uint8_t frame_count = 0;
    uint8_t frame_err_count = 0;
    uint16_t irqstatus;
-   bool telemetry = false;
    SX1280SetRx(RX_TX_SINGLE);
    ESP_LOGI(TAG, "Main Loop");
 
@@ -245,13 +233,18 @@ static void rxloop(void *arg)
          else
          {
             hw_timer_alarm_us(time_interval, 0);
+
+            SX1280GetPayload(FRAME_SIZE);
+            memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE);
+
             islinked = true;
             frame_ok = true;
             fhss_ch = (fhss_ch * 2 + 5) % 101;
             ESP_LOGI(TAG, "first frame");
             SX1280SetRfFrequency(fhss_ch);
-            SX1280SetRx(RX_TX_SINGLE);
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            SX1280SetRx(RX_TX_SINGLE);
+
             break;
          }
       }
@@ -271,75 +264,71 @@ static void rxloop(void *arg)
    {
 
       hw_timer_alarm_us(frame_interval, 0);
-
-      if (irqstatus & IRQ_RX_DONE)
+      if (frame_err_count >= err_count_max)
       {
-         SX1280GetPayload(FRAME_SIZE);
-         memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE);
-      } // frame
+         islinked = false;
+         frame_err_count = 0;
+         ESP_LOGI(TAG, "failsafe %d", fhss_ch);
+      }
+
       if (rc_frame.frameheader.telemetry)
       {
          SX1280SetFs();
          memcpy(&spi_buf.send_buf_8[1], term_frame.rcdata, FRAME_SIZE); // frame
          SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
          rc_frame.frameheader.telemetry = 0;
-         // ESP_LOGI(TAG, "telemetry");
       }
 
       frame_count++;
-      if (frame_count >= 200)
+      if (frame_count >= 100)
       {
-         if (err_count > 0)
-            ESP_LOGI(TAG, "Error Count %d", err_count);
+         ESP_LOGI(TAG, "LQ Count %d", lq_count);
          frame_count = 0;
-         err_count = 0;
+         lq_count = 0;
       }
-      if ((frame_err_count >= err_count_max) && (frame_ok == false))
-      {
-         islinked = false;
-         ESP_LOGI(TAG, "failsafe");
-         SX1280ClearIrqStatus(IRQ_RADIO_ALL);
-         SX1280SetRx(RX_TX_SINGLE);
-         hw_timer_disarm();
-         if (frame_err_count > err_count_max)
-            frame_err_count = err_count_max;
-      }
-      fhss_ch = (fhss_ch * 2 + 5) % 101;
+
       sx1280_notify = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      irqstatus = SX1280GetIrqStatus();
+      SX1280ClearIrqStatus(IRQ_RADIO_ALL);
       switch (sx1280_notify)
       {
       case 1: // rxtxdone
-         irqstatus = SX1280GetIrqStatus();
-         SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+         hw_timer_alarm_us(time_interval, 0);
          if (irqstatus & IRQERR)
          {
             frame_ok = false;
-            err_count++;
             frame_err_count++;
             ESP_LOGI(TAG, "crc error %d", fhss_ch);
          }
          else
          {
-            hw_timer_alarm_us(time_interval, 0);
             frame_ok = true;
             frame_err_count = 0;
+            lq_count++;
             islinked = true;
+            if (irqstatus & IRQ_RX_DONE)
+            {
+               SX1280GetPayload(FRAME_SIZE);
+               memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
+               freqerr = SX1280GetFrequencyError();
+               // xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
+               SX1280GetPacketStatus(&pktstatus);
+            }
          }
-
-         SX1280SetRfFrequency(fhss_ch);
-         SX1280SetRx(RX_TX_SINGLE);
          if (islinked)
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
+         {
+            fhss_ch = (fhss_ch * 2 + 5) % 101;
+            SX1280SetRfFrequency(fhss_ch);
+         }
+         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+         SX1280SetRx(RX_TX_SINGLE);
          break;
       case 2: // rxtimeout
          frame_ok = false;
-         err_count++;
          frame_err_count++;
-         ESP_LOGI(TAG, "timeout %d", fhss_ch);
          if (islinked)
          {
-            SX1280SetFs();
+            fhss_ch = (fhss_ch * 2 + 5) % 101;
             SX1280SetRfFrequency(fhss_ch);
             SX1280SetRx(RX_TX_SINGLE);
          }
@@ -349,7 +338,7 @@ static void rxloop(void *arg)
    vTaskDelete(NULL);
 }
 
-void led_loop()
+void ledloop()
 {
    bool led = 0;
 
@@ -357,15 +346,15 @@ void led_loop()
    {
       if (islinked)
       {
-         vTaskDelay(1);
+         vTaskDelay(10);
          led = frame_ok;
       }
       else
       {
          if (unbinded)
-            vTaskDelay(5);
-         else
             vTaskDelay(50);
+         else
+            vTaskDelay(500);
          led = !led;
       }
       gpio_set_level(GPIO_NUM_16, led);
@@ -390,6 +379,15 @@ static void radio_init()
    ESP_LOGI(TAG, "radio init!");
    for (uint8_t i = 0; i < FRAME_SIZE; i++)
       term_frame.rcdata[i] = i;
+}
+
+void crsfloop()
+{
+   while (1)
+   {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      vTaskDelay(5);
+   }
 }
 
 void app_main()
@@ -418,6 +416,8 @@ void app_main()
 
    radio_init();
 
+   // UART0_Init();
+
    sx1280_gpio.pin_bit_mask = (GPIO_Pin_4);
    sx1280_gpio.mode = GPIO_MODE_INPUT;
    sx1280_gpio.intr_type = GPIO_INTR_POSEDGE;
@@ -430,10 +430,11 @@ void app_main()
 
    xTaskCreate(rxloop, "mainloop", 2048, NULL, 12, &rxloop_h);
 
-   xTaskCreate(led_loop, "ledloop", configMINIMAL_STACK_SIZE / 2, NULL, 6, NULL);
+   xTaskCreate(ledloop, "ledloop", configMINIMAL_STACK_SIZE / 2, NULL, 6, NULL);
+
+   xTaskCreate(crsfloop, "crsfloop", configMINIMAL_STACK_SIZE / 2, NULL, 6, &crsfloop_h);
 }
 
 void test()
 {
-   uint a = sizeof(rc_frame);
 }

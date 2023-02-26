@@ -35,10 +35,10 @@ typedef union
    struct
    {
       uint8_t telemetry : 1; // frame_mode in bind frame
-      uint8_t ch16 : 1;      // ARM
       uint8_t ch13 : 2;      // Aux
       uint8_t ch14 : 2;      // Aux
       uint8_t ch15 : 2;      // Aux
+      uint8_t ch16 : 1;      // ARM
    };
    uint8_t val;
 } frameheader_t;
@@ -65,30 +65,43 @@ typedef struct
    uint8_t reserved : 4;
 } bind_info_t;
 
-typedef struct
-{
-   uint8_t sync_h;
-   uint8_t sync_l;
-} syncword_t;
-
-typedef union
-{
-   struct
-   {
-      ch9_12switch_t ch9_12switch;
-      bind_info_t bind_info;
-      syncword_t syncword;
-   };
-   uint8_t ch9_12[5];
-} last5ch_t;
-
 typedef union
 {
    struct
    {
       frameheader_t frameheader;
-      uint8_t ch1_8[10]; // channel 1-8
-      last5ch_t last4ch;
+      union
+      {
+         uint8_t ch1_8[10]; // channel 1-8
+         struct
+         {
+            unsigned int chan01 : 10;
+            unsigned int chan02 : 10;
+            unsigned int chan03 : 10;
+            unsigned int chan04 : 10;
+            unsigned int chan05 : 10;
+            unsigned int chan06 : 10;
+            unsigned int chan07 : 10;
+            unsigned int chan08 : 10;
+         } __attribute__((packed));
+      };
+      union
+      {
+         struct
+         {
+            unsigned int chan09 : 10;
+            unsigned int chan10 : 10;
+            unsigned int chan11 : 10;
+            unsigned int chan12 : 10;
+         } __attribute__((packed));
+         struct
+         {
+            ch9_12switch_t ch9_12switch;
+            bind_info_t bind_info;
+            uint16_t syncword;
+         } __attribute__((packed));
+         uint8_t ch9_12[5];
+      };
    };
    uint8_t rcdata[16];
 } frame_struct_t;

@@ -210,6 +210,8 @@ typedef void(DioIrqHandler)(void);
 #define REG_LORASYNCWORD 0x0944
 #define REG_LORAMAGICNUM 0x0925
 #define LORA_MAGICNUMBER 0x37
+#define REG_CrystalFEC 0x093C
+
 
 /*!
  * \brief Selector values to configure LNA regime
@@ -929,97 +931,37 @@ typedef struct
 /*!
  * \brief Represents the packet status for every packet type
  */
-typedef struct
+typedef union
 {
-    RadioPacketTypes_t packetType; //!< Packet to which the packet status are referring to.
-    union
+
+    struct
     {
+        int8_t RssiPkt; //!< The RSSI of the last packet
+        int8_t SnrPkt;  //!< The SNR of the last packet
         struct
         {
-            int8_t RssiAvg;  //!< The averaged RSSI
-            int8_t RssiSync; //!< The RSSI measured on last packet
-            struct
-            {
-                bool SyncError : 1;           //!< SyncWord error on last packet
-                bool LengthError : 1;         //!< Length error on last packet
-                bool CrcError : 1;            //!< CRC error on last packet
-                bool AbortError : 1;          //!< Abort error on last packet
-                bool HeaderReceived : 1;      //!< Header received on last packet
-                bool PacketReceived : 1;      //!< Packet received
-                bool PacketControlerBusy : 1; //!< Packet controller busy
-            } ErrorStatus;                    //!< The error status Byte
-            struct
-            {
-                bool RxNoAck : 1;       //!< No acknowledgment received for Rx with variable length packets
-                bool PacketSent : 1;    //!< Packet sent, only relevant in Tx mode
-            } TxRxStatus;               //!< The Tx/Rx status Byte
-            uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
-        } Gfsk;
+            bool PacketControlerBusy : 1; //!< Packet controller busy
+            bool PacketReceived : 1;      //!< Packet received
+            bool HeaderReceived : 1;      //!< Header received on last packet
+            bool AbortError : 1;          //!< Abort error on last packet
+            bool CrcError : 1;            //!< CRC error on last packet
+            bool LengthError : 1;         //!< Length error on last packet
+            bool SyncError : 1;           //!< SyncWord error on last packet
+            bool reserved1 : 1;
+        } ErrorStatus; //!< The error status Byte
         struct
         {
-            int8_t RssiPkt; //!< The RSSI of the last packet
-            int8_t SnrPkt;  //!< The SNR of the last packet
-            struct
-            {
-                bool SyncError : 1;           //!< SyncWord error on last packet
-                bool LengthError : 1;         //!< Length error on last packet
-                bool CrcError : 1;            //!< CRC error on last packet
-                bool AbortError : 1;          //!< Abort error on last packet
-                bool HeaderReceived : 1;      //!< Header received on last packet
-                bool PacketReceived : 1;      //!< Packet received
-                bool PacketControlerBusy : 1; //!< Packet controller busy
-            } ErrorStatus;                    //!< The error status Byte
-            struct
-            {
-                bool RxNoAck : 1;       //!< No acknowledgment received for Rx with variable length packets
-                bool PacketSent : 1;    //!< Packet sent, only relevant in Tx mode
-            } TxRxStatus;               //!< The Tx/Rx status Byte
-            uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
-        } LoRa;
-        struct
-        {
-            int8_t RssiAvg;  //!< The averaged RSSI
-            int8_t RssiSync; //!< The RSSI of the last packet
-            struct
-            {
-                bool SyncError : 1;           //!< SyncWord error on last packet
-                bool LengthError : 1;         //!< Length error on last packet
-                bool CrcError : 1;            //!< CRC error on last packet
-                bool AbortError : 1;          //!< Abort error on last packet
-                bool HeaderReceived : 1;      //!< Header received on last packet
-                bool PacketReceived : 1;      //!< Packet received
-                bool PacketControlerBusy : 1; //!< Packet controller busy
-            } ErrorStatus;                    //!< The error status Byte
-            struct
-            {
-                uint8_t RxPid : 2;      //!< PID of the Rx
-                bool RxNoAck : 1;       //!< No acknowledgment received for Rx with variable length packets
-                bool RxPidErr : 1;      //!< Received PID error
-                bool PacketSent : 1;    //!< Packet sent, only relevant in Tx mode
-            } TxRxStatus;               //!< The Tx/Rx status Byte
-            uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
-        } Flrc;
-        struct
-        {
-            int8_t RssiAvg;  //!< The averaged RSSI
-            int8_t RssiSync; //!< The RSSI of the last packet
-            struct
-            {
-                bool SyncError : 1;           //!< SyncWord error on last packet
-                bool LengthError : 1;         //!< Length error on last packet
-                bool CrcError : 1;            //!< CRC error on last packet
-                bool AbortError : 1;          //!< Abort error on last packet
-                bool HeaderReceived : 1;      //!< Header received on last packet
-                bool PacketReceived : 1;      //!< Packet received
-                bool PacketControlerBusy : 1; //!< Packet controller busy
-            } ErrorStatus;                    //!< The error status Byte
-            struct
-            {
-                bool PacketSent : 1;    //!< Packet sent, only relevant in Tx mode
-            } TxRxStatus;               //!< The Tx/Rx status Byte
-            uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
-        } Ble;
-    } Params;
+            bool PacketSent : 1; //!< Packet sent, only relevant in Tx mode
+            uint8_t reserved : 4;
+            bool RxNoAck : 1; //!< No acknowledgment received for Rx with variable length packets
+            uint8_t reserved2 : 2;
+
+        } TxRxStatus; //!< The Tx/Rx status Byte
+
+        uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
+        uint8_t reserved3 : 5;
+    } __attribute__((packed));
+    uint8_t status[5];
 } PacketStatus_t;
 
 /*!
@@ -1347,9 +1289,11 @@ int8_t SX1280GetRssiInst(void);
  */
 void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask, uint16_t dio3Mask);
 
-void SX1280SetLoraSyncWord(uint8_t sync_h, uint8_t sync_l);
+void SX1280SetLoraSyncWord(uint16_t syncword);
 
 void SX1280SetLoraMagicNum(uint8_t MagicNum);
+
+int32_t SX1280complement2(const uint32_t num, const uint8_t bitCnt);
 
 /*!
  * \brief Returns the current IRQ status
@@ -1632,7 +1576,7 @@ void SX1280RangingSetFilterNumSamples(uint8_t numSample);
  *
  * \retval efe                The estimated frequency error [Hz]
  */
-double SX1280GetFrequencyError(void);
+int32_t SX1280GetFrequencyError(void);
 
 /*!
  * \brief Process the analysis of radio IRQs and calls callback functions
