@@ -212,7 +212,6 @@ typedef void(DioIrqHandler)(void);
 #define LORA_MAGICNUMBER 0x37
 #define REG_CrystalFEC 0x093C
 
-
 /*!
  * \brief Selector values to configure LNA regime
  */
@@ -1270,7 +1269,7 @@ void SX1280GetRxBufferStatus(uint8_t *payloadLength, uint8_t *rxStartBuffer);
  *
  * \param [out] pktStatus     A structure of packet status
  */
-void SX1280GetPacketStatus(PacketStatus_t  *pktStatus);
+void SX1280GetPacketStatus(PacketStatus_t *pktStatus);
 
 /*!
  * \brief Returns the instantaneous RSSI value for the last packet received
@@ -1292,8 +1291,6 @@ void SX1280SetDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mas
 void SX1280SetLoraSyncWord(uint16_t syncword);
 
 void SX1280SetLoraMagicNum(uint8_t MagicNum);
-
-int32_t SX1280complement2(const uint32_t num, const uint8_t bitCnt);
 
 /*!
  * \brief Returns the current IRQ status
@@ -1576,7 +1573,7 @@ void SX1280RangingSetFilterNumSamples(uint8_t numSample);
  *
  * \retval efe                The estimated frequency error [Hz]
  */
-int32_t SX1280GetFrequencyError(void);
+int32_t SX1280GetFrequencyError(uint8_t ch, bool iq);
 
 /*!
  * \brief Process the analysis of radio IRQs and calls callback functions

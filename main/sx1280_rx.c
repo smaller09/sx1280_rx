@@ -55,12 +55,10 @@ static uint16_t time_interval;
 
 static uint16_t frame_interval;
 
-static volatile int32_t freqerr;
-
 static PacketStatus_t pktstatus;
 
-#define DEBUG
-// #undef DEBUG
+ModulationParams_t modulationParams;
+PacketParams_t packetParams;
 
 void dio_isr_handler(void *arg)
 {
@@ -82,16 +80,14 @@ void timercb()
 void radio_setparam()
 {
 
-   ModulationParams_t modulationParams;
-   PacketParams_t packetParams;
    modulationParams.PacketType = PACKET_TYPE_LORA;
    modulationParams.Params.LoRa.Bandwidth = LORA_BW_0800;
 
    packetParams.Params.LoRa.CrcMode = LORA_CRC_ON;
    packetParams.Params.LoRa.InvertIQ = LORA_IQ_NORMAL;
-   packetParams.Params.LoRa.HeaderType = LORA_PACKET_IMPLICIT;
+   packetParams.Params.LoRa.HeaderType = LORA_PACKET_EXPLICIT;
    packetParams.PacketType = PACKET_TYPE_LORA;
-   packetParams.Params.LoRa.PreambleLength = 12; // preamble length preamble length = LORA_PBLE_LEN_MANT*2^(LORA_PBLE_LEN_EXP)
+   packetParams.Params.LoRa.PreambleLength = 6; // preamble length preamble length = LORA_PBLE_LEN_MANT*2^(LORA_PBLE_LEN_EXP)
    modulationParams.Params.LoRa.CodingRate = LORA_CR_LI_4_7;
    packetParams.Params.LoRa.PayloadLength = 16;
    if ((unbinded) || (frame_mode == 0)) // unbinded or LLmode;
@@ -101,13 +97,11 @@ void radio_setparam()
 
    SX1280SetPacketType(modulationParams.PacketType);
 
-   SX1280SetRfFrequency(fhss_ch);
-
    SX1280SetBufferBaseAddresses(txBaseAddress, rxBaseAddress);
 
-   SX1280SetModulationParams(&modulationParams);
+   SX1280SetRfFrequency(fhss_ch);
 
-   SX1280SetPacketParams(&packetParams);
+   SX1280SetModulationParams(&modulationParams);
 
    SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
 
@@ -120,7 +114,7 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 330;
+      time_interval = 300;
       frame_interval = 10000;
       break;
    case 1:
@@ -140,22 +134,21 @@ static void setbind()
 {
    SX1280SetStandby(STDBY_XOSC);
    SX1280SetLoraSyncWord(0x2414); // reset to default syncword;
-   rc_frame.syncword = 0x2414;
+   frame_mode = 0;
    unbinded = true;
    ESP_LOGI(TAG, "Enter bind mode");
    fhss_ch = BIND_CHANNEL;
-   vTaskDelay(1);
    radio_setparam();
-   SX1280SetRx(RX_TX_SINGLE);
 }
 
 static void procces_bind_frame()
 {
    unbinded = false;
    SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(rc_frame.syncword);
+
    fhss_ch = rc_frame.bind_info.rx_num;
-   frame_mode = rc_frame.bind_info.frame_mode; // frame mode in the telemetry bit.
+
+   frame_mode = rc_frame.bind_info.frame_mode; // frame mode current only ll and lr mode
    frame_mode &= 1;
 
    if (rc_frame.bind_info.failsafe == 3) // receiver
@@ -185,6 +178,8 @@ static void procces_bind_frame()
    }
    ESP_LOGI(TAG, "bind status read!");
 
+   SX1280SetLoraSyncWord(rc_frame.syncword);
+
    radio_setparam();
 }
 
@@ -196,6 +191,16 @@ static void rxloop(void *arg)
    uint8_t frame_count = 0;
    uint8_t frame_err_count = 0;
    uint16_t irqstatus;
+   bool syncword_iq = 0;
+   bool invert_iq = 0;
+   int32_t freqerr = 0;
+   if (unbinded == false)
+   {
+      syncword_iq = (rc_frame.syncword % 2);
+      invert_iq = syncword_iq ^ (fhss_ch % 2);
+      packetParams.Params.LoRa.InvertIQ = invert_iq ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+      SX1280SetPacketParams(&packetParams);
+   }
    SX1280SetRx(RX_TX_SINGLE);
    ESP_LOGI(TAG, "Main Loop");
 
@@ -203,6 +208,7 @@ static void rxloop(void *arg)
    {
 
       sx1280_notify = ulTaskNotifyTake(pdTRUE, 10);
+
       if (sx1280_notify)
       {
          irqstatus = SX1280GetIrqStatus();
@@ -218,7 +224,6 @@ static void rxloop(void *arg)
          {
             SX1280GetPayload(FRAME_SIZE);
             memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
-
             nvs_handle_t nvs_handle;
             nvs_open(RC_TABLE, NVS_READWRITE, &nvs_handle);
             ESP_LOGI(TAG, "NVS Opened!");
@@ -227,6 +232,12 @@ static void rxloop(void *arg)
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             procces_bind_frame();
+
+            syncword_iq = (rc_frame.syncword % 2);
+            invert_iq = syncword_iq ^ (fhss_ch % 2);
+            packetParams.Params.LoRa.InvertIQ = invert_iq ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+
+            SX1280SetPacketParams(&packetParams);
             SX1280SetRx(RX_TX_SINGLE);
             continue;
          }
@@ -241,17 +252,18 @@ static void rxloop(void *arg)
             SX1280GetPayload(FRAME_SIZE);
             memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
 
-            xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
-            freqerr = SX1280GetFrequencyError();
+            SX1280GetFrequencyError(fhss_ch, syncword_iq);
             SX1280GetPacketStatus(&pktstatus);
 
             fhss_ch = (fhss_ch * 2 + 5) % 101;
             SX1280SetRfFrequency(fhss_ch);
-
+            invert_iq = syncword_iq ^ (fhss_ch % 2);
+            packetParams.Params.LoRa.InvertIQ = invert_iq ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+            SX1280SetPacketParams(&packetParams);
             ESP_LOGI(TAG, "first frame");
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             SX1280SetRx(RX_TX_SINGLE);
-
+            xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
             break;
          }
       }
@@ -264,6 +276,7 @@ static void rxloop(void *arg)
       {
          bind_count = 0;
          setbind();
+         SX1280SetRx(RX_TX_SINGLE);
       }
    }
 
@@ -294,6 +307,9 @@ static void rxloop(void *arg)
          lq_count = 0;
       }
 
+      if (frame_ok)
+         ESP_LOGI(TAG, "FreqErr: %d", freqerr);
+
       sx1280_notify = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
       irqstatus = SX1280GetIrqStatus();
       SX1280ClearIrqStatus(IRQ_RADIO_ALL);
@@ -317,8 +333,7 @@ static void rxloop(void *arg)
             {
                SX1280GetPayload(FRAME_SIZE);
                memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
-               freqerr = SX1280GetFrequencyError();
-               xTaskNotifyGive(crsfloop_h); // Start the crsf rc out
+               freqerr = SX1280GetFrequencyError(fhss_ch,invert_iq);
                SX1280GetPacketStatus(&pktstatus);
             }
          }
@@ -326,6 +341,9 @@ static void rxloop(void *arg)
          {
             fhss_ch = (fhss_ch * 2 + 5) % 101;
             SX1280SetRfFrequency(fhss_ch);
+            invert_iq = syncword_iq ^ (fhss_ch % 2);
+            packetParams.Params.LoRa.InvertIQ = invert_iq ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+            SX1280SetPacketParams(&packetParams);
          }
          ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
          SX1280SetRx(RX_TX_SINGLE);
@@ -337,6 +355,9 @@ static void rxloop(void *arg)
          {
             fhss_ch = (fhss_ch * 2 + 5) % 101;
             SX1280SetRfFrequency(fhss_ch);
+            invert_iq = syncword_iq ^ (fhss_ch % 2);
+            packetParams.Params.LoRa.InvertIQ = invert_iq ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+            SX1280SetPacketParams(&packetParams);
             SX1280SetRx(RX_TX_SINGLE);
          }
          break;
@@ -348,14 +369,39 @@ static void rxloop(void *arg)
 
 void crsfloop()
 {
+   crsfPacket_t crsfpacket;
    while (1)
    {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
       if (islinked)
       {
-         //uart sent rc frame
+         if (frame_ok)
+         {
+            crsfpacket.channels.ch1 = (uint32_t)(rc_frame.chan01 * 1.602150538 + 172);
+            crsfpacket.channels.ch2 = (uint32_t)(rc_frame.chan02 * 1.602150538 + 172);
+            crsfpacket.channels.ch3 = (uint32_t)(rc_frame.chan03 * 1.602150538 + 172);
+            crsfpacket.channels.ch4 = (uint32_t)(rc_frame.chan04 * 1.602150538 + 172);
+            crsfpacket.channels.ch5 = (uint32_t)(rc_frame.chan05 * 1.602150538 + 172);
+            crsfpacket.channels.ch6 = (uint32_t)(rc_frame.chan06 * 1.602150538 + 172);
+            crsfpacket.channels.ch7 = (uint32_t)(rc_frame.chan07 * 1.602150538 + 172);
+            crsfpacket.channels.ch8 = (uint32_t)(rc_frame.chan08 * 1.602150538 + 172);
+            crsfpacket.channels.ch9 = (uint32_t)(rc_frame.chan09 * 1.602150538 + 172);
+            crsfpacket.channels.ch10 = (uint32_t)(rc_frame.chan10 * 1.602150538 + 172);
+            crsfpacket.channels.ch11 = (uint32_t)(rc_frame.chan11 * 1.602150538 + 172);
+            crsfpacket.channels.ch12 = (uint32_t)(rc_frame.chan12 * 1.602150538 + 172);
+            crsfpacket.channels.ch13 = rc_frame.frameheader.ch13 * 546 + 172;
+            crsfpacket.channels.ch14 = rc_frame.frameheader.ch14 * 546 + 172;
+            crsfpacket.channels.ch15 = rc_frame.frameheader.ch15 * 546 + 172;
+            crsfpacket.channels.ch16 = rc_frame.frameheader.ch16 * 1639 + 172;
+            crsfpacket.header.device_addr = CRSF_ADDRESS_FLIGHT_CONTROLLER;
+            crsfpacket.header.frame_size = 24;
+            crsfpacket.header.type = CRSF_FRAMETYPE_RC_CHANNELS_PACKED;
+            // crsfpacket.crc8=crc8(&crsfpacket);
+         }
+
+         // uart sent rc frame
          vTaskDelay(5);
-         //uart sent link static
+         // uart sent link static
       }
       vTaskDelay(5);
    }
@@ -398,7 +444,7 @@ static void radio_init()
          procces_bind_frame();
    }
    else
-      radio_setparam();
+      setbind();
    nvs_close(nvs_handle);
    ESP_LOGI(TAG, "radio init!");
    for (uint8_t i = 0; i < FRAME_SIZE; i++)

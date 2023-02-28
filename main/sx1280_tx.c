@@ -52,6 +52,9 @@ static uint16_t time_interval;
 
 static uint16_t frame_interval;
 
+ModulationParams_t modulationParams;
+PacketParams_t packetParams;
+
 uint8_t rx_num = 1;
 static BaseType_t content_switch = pdFALSE;
 #define DEBUG
@@ -75,16 +78,14 @@ void timercb()
 void radio_setparam()
 {
 
-   ModulationParams_t modulationParams;
-   PacketParams_t packetParams;
    modulationParams.PacketType = PACKET_TYPE_LORA;
    modulationParams.Params.LoRa.Bandwidth = LORA_BW_0800;
 
    packetParams.Params.LoRa.CrcMode = LORA_CRC_ON;
    packetParams.Params.LoRa.InvertIQ = LORA_IQ_NORMAL;
-   packetParams.Params.LoRa.HeaderType = LORA_PACKET_IMPLICIT;
+   packetParams.Params.LoRa.HeaderType = LORA_PACKET_EXPLICIT;
    packetParams.PacketType = PACKET_TYPE_LORA;
-   packetParams.Params.LoRa.PreambleLength = 12; // preamble length preamble length = LORA_PBLE_LEN_MANT*2^(LORA_PBLE_LEN_EXP)
+   packetParams.Params.LoRa.PreambleLength = 6; // preamble length preamble length = LORA_PBLE_LEN_MANT*2^(LORA_PBLE_LEN_EXP)
    packetParams.Params.LoRa.PayloadLength = FRAME_SIZE;
    if ((unbinded) || (frame_mode == 0)) // unbinded or LLmode;
       modulationParams.Params.LoRa.SpreadingFactor = LORA_SF7;
@@ -158,42 +159,39 @@ static void procces_bind_frame()
    radio_setparam();
 }
 
-static void setbind()
-{
-   SX1280SetStandby(STDBY_XOSC);
-   SX1280SetLoraSyncWord(0x2414); // reset to default syncword;
-   unbinded = true;
-   frame_mode = 0;
-   ESP_LOGI(TAG, "Enter bind mode");
-   fhss_ch = BIND_CHANNEL;
-   vTaskDelay(1);
-   procces_bind_frame();
-}
-
 static void txloop(void *arg)
 {
    uint32_t sx1280_notify;
    uint16_t irqstatus;
    uint8_t telemetry = 3;
 
-   setbind();
+   procces_bind_frame();
 
-   memcpy(&spi_buf.send_buf_8[1], rc_frame.rcdata, FRAME_SIZE); // frame
-   SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
+   for (uint8_t i = 0; i < 5; i++)
+   {
+      memcpy(&spi_buf.send_buf_8[1], rc_frame.rcdata, FRAME_SIZE); // frame
+      SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
 
-   ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-   SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      SX1280ClearIrqStatus(IRQ_RADIO_ALL);
+      vTaskDelay(10);
+   }
+   bool syncword_iq = rc_frame.syncword % 2;
 
    ESP_LOGI(TAG, "Main Loop");
    fhss_ch = rx_num;
    SX1280SetLoraSyncWord(rc_frame.syncword);
+
    SX1280SetRfFrequency(fhss_ch);
-   vTaskDelay(200);
+   packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL: LORA_IQ_INVERTED;
+   SX1280SetPacketParams(&packetParams);
+
+   vTaskDelay(100);
    while (1)
    {
       hw_timer_alarm_us(frame_interval, 0);
       telemetry++;
-      telemetry = telemetry % 64;
+      telemetry = telemetry % 32;
       switch (telemetry)
       {
       case 1:
@@ -245,11 +243,13 @@ static void txloop(void *arg)
          }
 
          if (telemetry == 0)
-             SX1280SetRx(RX_TX_SINGLE);
+            SX1280SetRx(RX_TX_SINGLE);
          ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
          break;
       }
       SX1280SetRfFrequency(fhss_ch);
+      packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL: LORA_IQ_INVERTED;
+      SX1280SetPacketParams(&packetParams);
    }
    vTaskDelete(NULL);
 }
