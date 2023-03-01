@@ -1573,7 +1573,7 @@ void SX1280RangingSetFilterNumSamples(uint8_t numSample);
  *
  * \retval efe                The estimated frequency error [Hz]
  */
-int32_t SX1280GetFrequencyError(uint8_t ch, bool iq);
+int32_t SX1280GetFrequencyError(uint8_t ch, bool syncword_iq);
 
 /*!
  * \brief Process the analysis of radio IRQs and calls callback functions

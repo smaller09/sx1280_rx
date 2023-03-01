@@ -273,7 +273,7 @@ int32_t SX1280complement2(const uint32_t num, const uint8_t bitCnt)
     return retVal;
 }
 
-int32_t SX1280GetFrequencyError(uint8_t ch, bool iq)
+int32_t SX1280GetFrequencyError(uint8_t ch, bool syncword_iq)
 {
     int32_t efe = 0;
 
@@ -285,7 +285,7 @@ int32_t SX1280GetFrequencyError(uint8_t ch, bool iq)
     efe &= REG_LR_ESTIMATED_FREQUENCY_ERROR_MASK;
 
     efe = (int32_t)(((double)SX1280complement2(efe, 20)) * 0.003968); // / (1600.0 / (double)812500.0 * 1000.0)
-    if (iq)
+    if (syncword_iq ^ (ch % 2))
         fhss_freq[ch] += efe;
     else
         fhss_freq[ch] -= efe;
@@ -327,11 +327,7 @@ void SX1280SetFs(void)
 void SX1280_Init()
 {
     for (uint8_t i = 0; i < 101; i++)
-    {
         fhss_freq[i] = ((double)(2400000000 + i * 1000000)) / FREQ_STEP;
-        printf("Frep ch%d :", i);
-        printf("%x\n", fhss_freq[i]);
-    }
 
     hspi_init();
 
