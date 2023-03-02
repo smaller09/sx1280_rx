@@ -104,7 +104,7 @@ void radio_setparam()
 
    SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
 
-   SX1280SetTxParams(31, RADIO_RAMP_02_US);
+   SX1280SetTxParams(28, RADIO_RAMP_02_US);
    SX1280SetDioIrqParams(IRQ_RADIO_ALL, (IRQ_TX_DONE | IRQ_RX_DONE | IRQ_CRC_ERROR), IRQ_RADIO_NONE, IRQ_RADIO_NONE);
 
    SX1280ClearIrqStatus(IRQ_RADIO_ALL);
@@ -135,6 +135,8 @@ static void procces_bind_frame()
    SX1280SetStandby(STDBY_XOSC);
 
    fhss_ch = 96;
+
+   rx_num = 15;
    rx_num &= 0x3f;
    frame_mode = 0; // frame mode
 
@@ -167,6 +169,8 @@ static void txloop(void *arg)
 
    procces_bind_frame();
 
+   SX1280SetLoraSyncWord(0x1424);
+   
    for (uint8_t i = 0; i < 5; i++)
    {
       memcpy(&spi_buf.send_buf_8[1], rc_frame.rcdata, FRAME_SIZE); // frame
@@ -183,7 +187,7 @@ static void txloop(void *arg)
    SX1280SetLoraSyncWord(rc_frame.syncword);
 
    SX1280SetRfFrequency(fhss_ch);
-   packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL: LORA_IQ_INVERTED;
+   packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
    SX1280SetPacketParams(&packetParams);
 
    vTaskDelay(100);
@@ -209,10 +213,10 @@ static void txloop(void *arg)
       {
          SX1280GetPayload(FRAME_SIZE);
          memcpy(telemetry_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE);
-         for (uint8_t i = 0; i < FRAME_SIZE; i++)
-            printf(" %x", telemetry_frame.rcdata[i]);
-         printf("\n");
-         ESP_LOGI(TAG, "Telemetry");
+         /*   for (uint8_t i = 0; i < FRAME_SIZE; i++)
+               printf(" %x", telemetry_frame.rcdata[i]);
+            printf("\n");
+            ESP_LOGI(TAG, "Telemetry"); */
       }
 
       fhss_ch = (fhss_ch * 2 + 5) % 101;
@@ -248,7 +252,7 @@ static void txloop(void *arg)
          break;
       }
       SX1280SetRfFrequency(fhss_ch);
-      packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL: LORA_IQ_INVERTED;
+      packetParams.Params.LoRa.InvertIQ = ((fhss_ch % 2) ^ syncword_iq) ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
       SX1280SetPacketParams(&packetParams);
    }
    vTaskDelete(NULL);

@@ -109,7 +109,7 @@ void radio_setparam()
 
    SX1280SetLoraMagicNum(LORA_MAGICNUMBER);
 
-   SX1280SetTxParams(0, RADIO_RAMP_02_US);
+   SX1280SetTxParams(28, RADIO_RAMP_02_US);
 
    SX1280SetDioIrqParams(IRQ_RADIO_ALL, (IRQ_TX_DONE | IRQ_RX_DONE | IRQ_CRC_ERROR), IRQ_RADIO_NONE, IRQ_RADIO_NONE);
 
@@ -119,7 +119,7 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 300;
+      time_interval = 350;
       frame_interval = 10000;
       break;
    case 1:
@@ -189,7 +189,7 @@ static void procces_bind_frame()
 void do_fhss(bool syncword_iq)
 {
    fhss_ch = (fhss_ch * 2 + 5) % 101;
-   packetParams.Params.LoRa.InvertIQ = syncword_iq ^ (fhss_ch % 2) ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
+   packetParams.Params.LoRa.InvertIQ = (syncword_iq ^ (fhss_ch % 2)) ? LORA_IQ_NORMAL : LORA_IQ_INVERTED;
    SX1280SetPacketParams(&packetParams);
    SX1280SetRfFrequency(fhss_ch);
 }
@@ -228,10 +228,8 @@ static void rxloop(void *arg)
    uint8_t bind_count = 0;
    uint8_t lq_count = 0;
    uint8_t frame_count = 0;
-   uint8_t frame_err_count = 0;
    uint16_t irqstatus = 0;
    bool syncword_iq = 0;
-   int32_t freqerr = 0;
    ESP_LOGI(TAG, "Main Loop");
    if (unbinded)
       do_bind();
@@ -245,27 +243,33 @@ static void rxloop(void *arg)
    while (1)
    {
       hw_timer_alarm_us(frame_interval, 0);
-      if (rc_frame.frameheader.telemetry)
+      if (frame_ok)
       {
-         SX1280SetFs();
-         memcpy(&spi_buf.send_buf_8[1], term_frame.rcdata, FRAME_SIZE); // frame
-         SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
-         rc_frame.frameheader.telemetry = 0;
+         if (rc_frame.frameheader.telemetry)
+         {
+            SX1280SetFs();
+            memcpy(&spi_buf.send_buf_8[1], term_frame.rcdata, FRAME_SIZE); // frame
+            SX1280SendPayload(FRAME_SIZE, RX_TX_SINGLE);
+            rc_frame.frameheader.telemetry = 0;
+         }
+         if (lq_count < 200)
+            lq_count++;
       }
-      if (frame_err_count >= err_count_max)
+      else
+      {
+         if (lq_count > 0)
+            lq_count--;
+         ESP_LOGI(TAG, "error %d", lq_count);
+      }
+
+      if (lq_count == 0)
       {
          islinked = false;
-         frame_err_count = 0;
          ESP_LOGI(TAG, "failsave %d", fhss_ch);
       }
+
       frame_count++;
 
-      if (frame_count >= 100)
-      {
-         ESP_LOGI(TAG, "LQ Count %d", lq_count);
-         frame_count = 0;
-         lq_count = 0;
-      }
       if (irqstatus & IRQERR)
          ESP_LOGI(TAG, "crc error %d", fhss_ch);
 
@@ -307,19 +311,16 @@ static void rxloop(void *arg)
          if (irqstatus & IRQERR)
          {
             frame_ok = false;
-            frame_err_count++;
          }
          else
          {
             frame_ok = true;
-            frame_err_count = 0;
-            lq_count++;
             islinked = true;
             if (irqstatus & IRQ_RX_DONE)
             {
                SX1280GetPayload(FRAME_SIZE);
                memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
-               freqerr = SX1280GetFrequencyError(fhss_ch, syncword_iq);
+               SX1280GetFrequencyError(fhss_ch, syncword_iq);
                SX1280GetPacketStatus(&pktstatus);
             }
          }
@@ -330,7 +331,6 @@ static void rxloop(void *arg)
          break;
       case 2: // rxtimeout
          frame_ok = false;
-         frame_err_count++;
          if (islinked)
          {
             SX1280SetFs();
@@ -343,6 +343,7 @@ static void rxloop(void *arg)
    }
    vTaskDelete(NULL);
 }
+
 
 void crsfloop()
 {
