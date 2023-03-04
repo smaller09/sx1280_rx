@@ -9,8 +9,10 @@
 #include <sys/time.h>
 #include "time.h"
 #include "esp_task_wdt.h"
+//#include "sx1280.h"
+//#include "serial.h"
 
-typedef union
+typedef union sx1280_buff_u
 {
    struct
    {
@@ -30,7 +32,7 @@ typedef union
    /* data */
 } sx1280_buff_t;
 
-typedef union
+typedef union frameheader_u
 {
    struct
    {
@@ -43,7 +45,7 @@ typedef union
    uint8_t val;
 } frameheader_t;
 
-typedef union
+typedef union ch9_12switch_u
 {
    struct
    {
@@ -55,7 +57,7 @@ typedef union
    uint8_t val;
 } ch9_12switch_t;
 
-typedef struct
+typedef struct bind_info_s
 {
    uint8_t failsafe : 2; // failsafe mode
    uint8_t rx_num : 6;
@@ -65,7 +67,7 @@ typedef struct
    uint8_t reserved : 4;
 } bind_info_t;
 
-typedef union
+typedef union frame_struct_u
 {
    struct
    {
@@ -75,24 +77,24 @@ typedef union
          uint8_t ch1_8[10]; // channel 1-8
          struct
          {
-            unsigned int chan01 : 10;
-            unsigned int chan02 : 10;
-            unsigned int chan03 : 10;
-            unsigned int chan04 : 10;
-            unsigned int chan05 : 10;
-            unsigned int chan06 : 10;
-            unsigned int chan07 : 10;
-            unsigned int chan08 : 10;
+            uint16_t chan01 : 10;
+            uint16_t chan02 : 10;
+            uint16_t chan03 : 10;
+            uint16_t chan04 : 10;
+            uint16_t chan05 : 10;
+            uint16_t chan06 : 10;
+            uint16_t chan07 : 10;
+            uint16_t chan08 : 10;
          } __attribute__((packed));
       };
       union
       {
          struct
          {
-            unsigned int chan09 : 10;
-            unsigned int chan10 : 10;
-            unsigned int chan11 : 10;
-            unsigned int chan12 : 10;
+            uint16_t chan09 : 10;
+            uint16_t chan10 : 10;
+            uint16_t chan11 : 10;
+            uint16_t chan12 : 10;
          } __attribute__((packed));
          struct
          {

@@ -1,13 +1,39 @@
 #ifndef __SERIAL_H__
 #define __SERIAL_H__
 
-#include "sx1280_rx.h"
 #include <stdint.h>
 #include "driver/uart.h"
+#include "sx1280.h"
 
-#define PACKED __attribute__((packed))
+/*
+ * CRSF protocol
+ *
+ * CRSF protocol uses a single wire half duplex uart connection.
+ * The master sends one frame every 4ms and the slave replies between two frames from the master.
+ *
+ * 420000 baud
+ * not inverted
+ * 8 Bit
+ * 1 Stop bit
+ * Big endian
+ * 420000 bit/s = 46667 byte/s (including stop bit) = 21.43us per byte
+ * Max frame size is 64 bytes
+ * A 64 byte frame plus 1 sync byte can be transmitted in 1393 microseconds.
+ *
+ * CRSF_TIME_NEEDED_PER_FRAME_US is set conservatively at 1500 microseconds
+ *
+ * Every frame has the structure:
+ * <Device address><Frame length><Type><Payload><CRC>
+ *
+ * Device address: (uint8_t)
+ * Frame length:   length in  bytes including Type (uint8_t)
+ * Type:           (uint8_t)
+ * CRC:            (uint8_t)
+ *
+ */
 
 #define CRSF_BAUDRATE 420000
+#define CRSF_CRC_POLY 0xd5
 #define CRSF_NUM_CHANNELS 16
 #define CRSF_CHANNEL_VALUE_MIN 172
 #define CRSF_CHANNEL_VALUE_1000 191
@@ -43,7 +69,9 @@ enum
 typedef enum
 {
     CRSF_FRAMETYPE_GPS = 0x02,
+    CRSF_FRAMETYPE_VARIO = 0x07,
     CRSF_FRAMETYPE_BATTERY_SENSOR = 0x08,
+    CRSF_FRAMETYPE_BARO_ALTITUDE = 0x09,
     CRSF_FRAMETYPE_LINK_STATISTICS = 0x14,
     CRSF_FRAMETYPE_OPENTX_SYNC = 0x10,
     CRSF_FRAMETYPE_RADIO_ID = 0x3A,
@@ -85,29 +113,29 @@ typedef struct crsf_header_s
     uint8_t device_addr; // from crsf_addr_e
     uint8_t frame_size;  // counts size after this byte, so it must be the payload size + 2 (type and crc)
     uint8_t type;        // from crsf_frame_type_e
-} PACKED crsf_header_t;
+} __attribute__((packed)) crsf_header_t;
 
 typedef struct crsf_channels_s
 {
-    unsigned ch1 : 11;
-    unsigned ch2 : 11;
-    unsigned ch3 : 11;
-    unsigned ch4 : 11;
-    unsigned ch5 : 11;
-    unsigned ch6 : 11;
-    unsigned ch7 : 11;
-    unsigned ch8 : 11;
-    unsigned ch9 : 11;
-    unsigned ch10 : 11;
-    unsigned ch11 : 11;
-    unsigned ch12 : 11;
-    unsigned ch13 : 11;
-    unsigned ch14 : 11;
-    unsigned ch15 : 11;
-    unsigned ch16 : 11;
-} PACKED crsf_channels_t;
-
-typedef struct crsfPayloadLinkstatistics_s
+    unsigned int ch1 : 11;
+    unsigned int ch2 : 11;
+    unsigned int ch3 : 11;
+    unsigned int ch4 : 11;
+    unsigned int ch5 : 11;
+    unsigned int ch6 : 11;
+    unsigned int ch7 : 11;
+    unsigned int ch8 : 11;
+    unsigned int ch9 : 11;
+    unsigned int ch10 : 11;
+    unsigned int ch11 : 11;
+    unsigned int ch12 : 11;
+    unsigned int ch13 : 11;
+    unsigned int ch14 : 11;
+    unsigned int ch15 : 11;
+    unsigned int ch16 : 11;
+} __attribute__((packed)) crsf_channels_t;
+ 
+typedef struct crsfLinkStatistics_s
 {
     uint8_t uplink_RSSI_1;
     uint8_t uplink_RSSI_2;
@@ -121,13 +149,20 @@ typedef struct crsfPayloadLinkstatistics_s
     int8_t downlink_SNR;
 } crsfLinkStatistics_t;
 
+typedef struct crsflinkstatusPacket_s
+{
+    crsf_header_t header;
+    crsfLinkStatistics_t linkstatus;
+    uint8_t crc8;
+} __attribute__((packed)) crsflinkstatusPacket_t;
+
 typedef struct crsf_sensor_battery_s
 {
     unsigned voltage : 16;  // V * 10 big endian
     unsigned current : 16;  // A * 10 big endian
     unsigned capacity : 24; // mah big endian
     unsigned remaining : 8; // %
-} PACKED crsf_sensor_battery_t;
+} __attribute__((packed)) crsf_sensor_battery_t;
 
 typedef struct crsf_sensor_gps_s
 {
@@ -137,65 +172,31 @@ typedef struct crsf_sensor_gps_s
     uint16_t heading;     // GPS heading, degree/100 big endian
     uint16_t altitude;    // meters, +1000m big endian
     uint8_t satellites;   // satellites
-} PACKED crsf_sensor_gps_t;
+} __attribute__((packed)) crsf_sensor_gps_t;
 
-typedef struct crsfPacket_s
+typedef struct crsfrcPacket_s
 {
     crsf_header_t header;
     crsf_channels_t channels;
     uint8_t crc8;
-} PACKED crsfPacket_t;
+} __attribute__((packed)) crsfrcPacket_t;
 
 typedef struct crsf_sensor_baro_vario_s
 {
     uint16_t altitude;   // Altitude in decimeters + 10000dm, or Altitude in meters if high bit is set, BigEndian
     int16_t verticalspd; // Vertical speed in cm/s, BigEndian
-} PACKED crsf_sensor_baro_vario_t;
+} __attribute__((packed)) crsf_sensor_baro_vario_t;
 
 typedef struct crsf_sensor_attitude_s
 {
     int16_t Pitch; // angle ( rad / 10000 )
     int16_t Roll;  // angle ( rad / 10000 )
     int16_t Yaw;   // angle ( rad / 10000 )
-} PACKED crsf_sensor_attitude_t;
-
-#if !defined(__linux__)
-static inline uint16_t htobe16(uint16_t val)
-{
-#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return val;
-#else
-    return __builtin_bswap16(val);
-#endif
-}
-
-static inline uint16_t be16toh(uint16_t val)
-{
-#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return val;
-#else
-    return __builtin_bswap16(val);
-#endif
-}
-
-static inline uint32_t htobe32(uint32_t val)
-{
-#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return val;
-#else
-    return __builtin_bswap32(val);
-#endif
-}
-
-static inline uint32_t be32toh(uint32_t val)
-{
-#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return val;
-#else
-    return __builtin_bswap32(val);
-#endif
-}
-#endif
+} __attribute__((packed)) crsf_sensor_attitude_t;
 
 void UART0_Init();
+void crsfsendrc(frame_struct_t *frame);
+uint8_t crc8calc(uint8_t *data, uint8_t len);
+void crsfsendlinkstatus(PacketStatus_t *pktstatus);
+void crc8init(uint8_t poly);
 #endif

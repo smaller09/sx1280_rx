@@ -50,7 +50,7 @@ telemetry rate (1:8)
        - bits 6..7 =  Aux channel  (2 bit channel12)
     12.
        - bits 0..1 = failsafe mode 00: Hold, 01:No pulses, 10: Custom, 11: Receiver
-       - bit  2..7 = Rx_Num (6 bits) /FHSS Hope Step = Rx_Num+1.
+       - bit  2..7 = Rx_Num (6 bits) /FHSS Hope = Rx_Num.
     13. 
        - bit 0     = 0:sbus output, 1: crsf output.
        - bit 1     = 0:sbus normal, 1: sbus inverted.

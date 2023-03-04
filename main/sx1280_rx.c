@@ -57,6 +57,8 @@ static uint16_t frame_interval;
 
 static PacketStatus_t pktstatus;
 
+static uint8_t failsafe_mode;
+
 ModulationParams_t modulationParams;
 PacketParams_t packetParams;
 
@@ -119,7 +121,7 @@ void radio_setparam()
    {
    case 0:
       err_count_max = 200;
-      time_interval = 350;
+      time_interval = 380;
       frame_interval = 10000;
       break;
    case 1:
@@ -158,7 +160,9 @@ static void procces_bind_frame()
 
    radio_setparam();
 
-   if (rc_frame.bind_info.failsafe == 3) // receiver
+   failsafe_mode = rc_frame.bind_info.failsafe;
+
+   if (failsafe_mode == 3) // receiver
    {
 
       failsafe_frame.frameheader.val = 0x00;
@@ -175,7 +179,7 @@ static void procces_bind_frame()
       failsafe_frame.chan11 = 511;
       failsafe_frame.chan12 = 511;
    }
-   if (rc_frame.bind_info.failsafe == 2)
+   if (failsafe_mode == 2)
    {
       memcpy(failsafe_frame.rcdata, rc_frame.rcdata, 11); // frame
       failsafe_frame.chan09 = rc_frame.ch9_12switch.ch9 * 511;
@@ -260,6 +264,9 @@ static void rxloop(void *arg)
          if (lq_count > 0)
             lq_count--;
          ESP_LOGI(TAG, "error %d", lq_count);
+         pktstatus.RssiPkt = -132;
+         pktstatus.SnrPkt = 0;
+         pktstatus.LQI = lq_count;
       }
 
       if (lq_count == 0)
@@ -322,6 +329,7 @@ static void rxloop(void *arg)
                memcpy(rc_frame.rcdata, spi_buf.recv_buf_8, FRAME_SIZE); // frame
                SX1280GetFrequencyError(fhss_ch, syncword_iq);
                SX1280GetPacketStatus(&pktstatus);
+               pktstatus.LQI = lq_count; // save lq
             }
          }
          if (islinked)
@@ -344,44 +352,36 @@ static void rxloop(void *arg)
    vTaskDelete(NULL);
 }
 
-
 void crsfloop()
 {
-   crsfPacket_t crsfpacket;
    while (1)
    {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
       if (islinked)
       {
-         if (frame_ok)
-         {
-            crsfpacket.channels.ch1 = (uint32_t)(rc_frame.chan01 * 1.602150538 + 172);
-            crsfpacket.channels.ch2 = (uint32_t)(rc_frame.chan02 * 1.602150538 + 172);
-            crsfpacket.channels.ch3 = (uint32_t)(rc_frame.chan03 * 1.602150538 + 172);
-            crsfpacket.channels.ch4 = (uint32_t)(rc_frame.chan04 * 1.602150538 + 172);
-            crsfpacket.channels.ch5 = (uint32_t)(rc_frame.chan05 * 1.602150538 + 172);
-            crsfpacket.channels.ch6 = (uint32_t)(rc_frame.chan06 * 1.602150538 + 172);
-            crsfpacket.channels.ch7 = (uint32_t)(rc_frame.chan07 * 1.602150538 + 172);
-            crsfpacket.channels.ch8 = (uint32_t)(rc_frame.chan08 * 1.602150538 + 172);
-            crsfpacket.channels.ch9 = (uint32_t)(rc_frame.chan09 * 1.602150538 + 172);
-            crsfpacket.channels.ch10 = (uint32_t)(rc_frame.chan10 * 1.602150538 + 172);
-            crsfpacket.channels.ch11 = (uint32_t)(rc_frame.chan11 * 1.602150538 + 172);
-            crsfpacket.channels.ch12 = (uint32_t)(rc_frame.chan12 * 1.602150538 + 172);
-            crsfpacket.channels.ch13 = rc_frame.frameheader.ch13 * 546 + 172;
-            crsfpacket.channels.ch14 = rc_frame.frameheader.ch14 * 546 + 172;
-            crsfpacket.channels.ch15 = rc_frame.frameheader.ch15 * 546 + 172;
-            crsfpacket.channels.ch16 = rc_frame.frameheader.ch16 * 1639 + 172;
-            crsfpacket.header.device_addr = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-            crsfpacket.header.frame_size = 24;
-            crsfpacket.header.type = CRSF_FRAMETYPE_RC_CHANNELS_PACKED;
-            // crsfpacket.crc8=crc8(&crsfpacket);
-         }
-
-         // uart sent rc frame
+         crsfsendrc(&rc_frame); // uart sent rc frame
          vTaskDelay(5);
-         // uart sent link static
+         crsfsendlinkstatus(&pktstatus); // uart sent link static
       }
-      vTaskDelay(5);
+      else
+      {
+         switch (failsafe_mode)
+         {
+         case 0:
+            crsfsendrc(&rc_frame);
+            vTaskDelay(5);
+            crsfsendlinkstatus(&pktstatus);
+            break;
+         case 1:
+            break;
+         case 2:
+         case 3:
+            crsfsendrc(&failsafe_frame);
+            vTaskDelay(5);
+            crsfsendlinkstatus(&pktstatus);
+            break;
+         }
+      }
    }
    vTaskDelete(NULL);
 }
@@ -465,13 +465,9 @@ void app_main()
 
    hw_timer_init(timercb, NULL);
 
-   xTaskCreate(rxloop, "mainloop", 8192, NULL, 12, &rxloop_h);
+   xTaskCreate(rxloop, "mainloop", 8192, NULL, 10, &rxloop_h);
 
    xTaskCreate(ledloop, "ledloop", configMINIMAL_STACK_SIZE / 2, NULL, 6, NULL);
 
-   xTaskCreate(crsfloop, "crsfloop", 1024, NULL, 6, &crsfloop_h);
-}
-
-void test()
-{
+   xTaskCreate(crsfloop, "crsfloop", 1024, NULL, 9, &crsfloop_h);
 }

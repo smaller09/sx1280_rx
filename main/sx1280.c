@@ -1,5 +1,5 @@
-#include "sx1280.h"
 #include "sx1280_rx.h"
+#include "sx1280.h"
 #include "driver/gpio.h"
 #include "driver/spi.h"
 
@@ -314,9 +314,9 @@ uint8_t SX1280GetLNARegime()
 void SX1280GetPacketStatus(PacketStatus_t *pktStatus)
 {
     hspi_trans(RADIO_GET_PACKETSTATUS, 0, 48);
-    memcpy(pktStatus->status, &spi_buf.recv_buf_8[1], 5);
-    pktStatus->RssiPkt = -(pktStatus->status[0] / 2);
-    (pktStatus->status[1] < 128) ? (pktStatus->SnrPkt = pktStatus->SnrPkt / 4) : (pktStatus->SnrPkt = (pktStatus->status[1] - 256) / 4);
+    memcpy(pktStatus, &spi_buf.recv_buf_8[1], 5);
+    pktStatus->RssiPkt = -(pktStatus->RssiPkt / 2);
+    (pktStatus->SnrPkt < 128) ? (pktStatus->SnrPkt = pktStatus->SnrPkt / 4) : (pktStatus->SnrPkt = (pktStatus->SnrPkt - 256) / 4);
 }
 
 void SX1280SetFs(void)

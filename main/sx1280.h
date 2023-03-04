@@ -25,11 +25,6 @@ Maintainer: Miguel Luis, Gregory Cristian and Matthieu Verdy
 #define SX1280_DEBUG 0
 
 /*!
- * \brief Hardware IO IRQ callback function definition
- */
-typedef void(DioIrqHandler)(void);
-
-/*!
  * \brief Provides the frequency of the chip running on the radio and the frequency step
  *
  * \remark These defines are used for computing the frequency divider to set the RF frequency
@@ -224,7 +219,7 @@ typedef enum
 /*!
  * \brief Structure describing the radio status
  */
-typedef union
+typedef union RadioStatus_s
 {
     /*!
      * \brief Structure of the radio status
@@ -776,7 +771,7 @@ typedef struct TickTime_s
 /*!
  * \brief The type describing the modulation parameters for every packet types
  */
-typedef struct
+typedef struct ModulationParams_s
 {
     RadioPacketTypes_t PacketType; //!< Packet to which the modulation parameters are referring to.
                                    //    union
@@ -855,7 +850,7 @@ typedef enum
  * \brief The radio callbacks structure
  * Holds function pointers to be called on radio interrupts
  */
-typedef struct
+typedef struct RadioCallbacks_s
 {
     void (*txDone)(void);                      //!< Pointer to a function run on successful transmission
     void (*rxDone)(void);                      //!< Pointer to a function run on successful reception
@@ -871,7 +866,7 @@ typedef struct
 /*!
  * \brief The type describing the packet parameters for every packet types
  */
-typedef struct
+typedef struct PacketParams_s
 {
     RadioPacketTypes_t PacketType; //!< Packet to which the packet parameters are referring to.
                                    //    union
@@ -930,43 +925,44 @@ typedef struct
 /*!
  * \brief Represents the packet status for every packet type
  */
-typedef union
+typedef struct PacketStatus_s
 {
-
+    int8_t RssiPkt; //!< The RSSI of the last packet
+    int8_t SnrPkt;  //!< The SNR of the last packet
     struct
     {
-        int8_t RssiPkt; //!< The RSSI of the last packet
-        int8_t SnrPkt;  //!< The SNR of the last packet
+        bool PacketControlerBusy : 1; //!< Packet controller busy
+        bool PacketReceived : 1;      //!< Packet received
+        bool HeaderReceived : 1;      //!< Header received on last packet
+        bool AbortError : 1;          //!< Abort error on last packet
+        bool CrcError : 1;            //!< CRC error on last packet
+        bool LengthError : 1;         //!< Length error on last packet
+        bool SyncError : 1;           //!< SyncWord error on last packet
+        bool reserved1 : 1;
+    } ErrorStatus; //!< The error status Byte
+    struct
+    {
+        bool PacketSent : 1; //!< Packet sent, only relevant in Tx mode
+        uint8_t reserved : 4;
+        bool RxNoAck : 1; //!< No acknowledgment received for Rx with variable length packets
+        uint8_t reserved2 : 2;
+
+    } TxRxStatus; //!< The Tx/Rx status Byte
+    union
+    {
         struct
         {
-            bool PacketControlerBusy : 1; //!< Packet controller busy
-            bool PacketReceived : 1;      //!< Packet received
-            bool HeaderReceived : 1;      //!< Header received on last packet
-            bool AbortError : 1;          //!< Abort error on last packet
-            bool CrcError : 1;            //!< CRC error on last packet
-            bool LengthError : 1;         //!< Length error on last packet
-            bool SyncError : 1;           //!< SyncWord error on last packet
-            bool reserved1 : 1;
-        } ErrorStatus; //!< The error status Byte
-        struct
-        {
-            bool PacketSent : 1; //!< Packet sent, only relevant in Tx mode
-            uint8_t reserved : 4;
-            bool RxNoAck : 1; //!< No acknowledgment received for Rx with variable length packets
-            uint8_t reserved2 : 2;
-
-        } TxRxStatus; //!< The Tx/Rx status Byte
-
-        uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
-        uint8_t reserved3 : 5;
-    } __attribute__((packed));
-    uint8_t status[5];
+            uint8_t SyncAddrStatus : 3; //!< The id of the correlator who found the packet
+            uint8_t reserved3 : 5;
+        };
+        uint8_t LQI;
+    };
 } PacketStatus_t;
 
 /*!
  * \brief Represents the Rx internal counters values when GFSK or LORA packet type is used
  */
-typedef struct
+typedef struct RxCounter_s
 {
     RadioPacketTypes_t packetType; //!< Packet to which the packet status are referring to.
     union
@@ -990,7 +986,7 @@ typedef struct
 /*!
  * \brief Represents a calibration configuration
  */
-typedef struct
+typedef struct CalibrationParams_s
 {
     uint8_t RC64KEnable : 1;    //!< Calibrate RC64K clock
     uint8_t RC13MEnable : 1;    //!< Calibrate RC13M clock
@@ -1003,7 +999,7 @@ typedef struct
 /*!
  * \brief Represents a sleep mode configuration
  */
-typedef struct
+typedef struct SleepParams_s
 {
     uint8_t WakeUpRTC : 1;               //!< Get out of sleep mode if wakeup signal received from RTC
     uint8_t InstructionRamRetention : 1; //!< InstructionRam is conserved during sleep
